@@ -118,6 +118,7 @@ StyledFlickable {
                         ThemeService.setShellFollowThemeMode(checked)
                 }
             }
+
         }
 
         SettingsSection {
@@ -204,6 +205,51 @@ StyledFlickable {
                     horizontalPadding: 16
                     onValueSelected: value => PersonalizationConfig
                         .setPowerButtonBatteryStyle(value)
+                }
+            }
+
+            SettingsRow {
+                Layout.fillWidth: true
+                visible: PersonalizationConfig
+                    .isExtensionEnabled("batteryRing")
+                    && PersonalizationConfig.powerButtonBatteryStyle
+                        === "wave"
+                iconName: "animation"
+                title: qsTr("波浪动画")
+                supportingText:
+                    PersonalizationConfig.waveBatteryAnimationEnabled
+                    ? qsTr("液面持续流动") : qsTr("液面保持静止")
+
+                trailing: StyledSwitch {
+                    checked:
+                        PersonalizationConfig.waveBatteryAnimationEnabled
+                    Accessible.name: qsTr("启用波浪动画")
+                    onToggled: PersonalizationConfig
+                        .setWaveBatteryAnimationEnabled(checked)
+                }
+            }
+
+            SettingsRow {
+                Layout.fillWidth: true
+                visible: PersonalizationConfig
+                    .isExtensionEnabled("batteryRing")
+                    && PersonalizationConfig.powerButtonBatteryStyle
+                        === "wave"
+                enabled: PersonalizationConfig.waveBatteryAnimationEnabled
+                iconName: "battery_saver"
+                title: qsTr("动画跟随节能模式")
+                supportingText:
+                    PersonalizationConfig
+                        .waveBatteryAnimationFollowPowerProfile
+                    ? qsTr("进入节能模式时自动暂停波浪")
+                    : qsTr("所有电源模式下都保持动画")
+
+                trailing: StyledSwitch {
+                    checked: PersonalizationConfig
+                        .waveBatteryAnimationFollowPowerProfile
+                    Accessible.name: qsTr("动画跟随节能模式")
+                    onToggled: PersonalizationConfig
+                        .setWaveBatteryAnimationFollowPowerProfile(checked)
                 }
             }
         }

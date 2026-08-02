@@ -21,8 +21,10 @@ Item {
         && PersonalizationConfig.powerButtonBatteryStyle === "ring"
     readonly property bool showBatteryWave: showBatteryEffect
         && PersonalizationConfig.powerButtonBatteryStyle === "wave"
-    readonly property bool batteryCharging:
-        String(battery.status || "").toLowerCase().indexOf("charg") >= 0
+    readonly property bool waveAnimationRunning:
+        PersonalizationConfig.waveBatteryAnimationEnabled
+        && (!PersonalizationConfig.waveBatteryAnimationFollowPowerProfile
+            || PowerProfileService.profile !== "power-saver")
 
     implicitHeight: buttonSize
     implicitWidth: buttonSize
@@ -74,8 +76,7 @@ Item {
                 duration: 1800
                 loops: Animation.Infinite
                 easing.type: Easing.Linear
-                running: batteryWave.visible
-                    && (root.isHovered || root.batteryCharging)
+                running: batteryWave.visible && root.waveAnimationRunning
             }
 
             onPaint: {

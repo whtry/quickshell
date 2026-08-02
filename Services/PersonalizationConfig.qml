@@ -195,6 +195,8 @@ Singleton {
     property string powerMenuStyle: "grid"
     property string clockStyle: "staggered"
     property string powerButtonBatteryStyle: "ring"
+    property bool waveBatteryAnimationEnabled: true
+    property bool waveBatteryAnimationFollowPowerProfile: true
     property var barSystemMonitorMetrics: ({
         "cpu": true,
         "temperature": true,
@@ -789,6 +791,14 @@ Singleton {
             root.powerButtonBatteryStyles, value, "ring"));
     }
 
+    function setWaveBatteryAnimationEnabled(value) {
+        setValue("waveBatteryAnimationEnabled", !!value);
+    }
+
+    function setWaveBatteryAnimationFollowPowerProfile(value) {
+        setValue("waveBatteryAnimationFollowPowerProfile", !!value);
+    }
+
     function setShellBackgroundOpacity(value) {
         setValue("shellBackgroundOpacity",
             normalizedBoundedReal(value, 1.0, 0.0, 1.0));
@@ -917,7 +927,11 @@ Singleton {
                 "systemMonitorMetrics":
                     root.cloneMap(root.barSystemMonitorMetrics),
                 "powerButtonBatteryStyle":
-                    root.powerButtonBatteryStyle
+                    root.powerButtonBatteryStyle,
+                "waveBatteryAnimationEnabled":
+                    root.waveBatteryAnimationEnabled,
+                "waveBatteryAnimationFollowPowerProfile":
+                    root.waveBatteryAnimationFollowPowerProfile
             },
             "extensions": root.cloneMap(root.extensionComponents),
             "sounds": {
@@ -1081,6 +1095,12 @@ Singleton {
         root.powerButtonBatteryStyle = normalizedOption(
             root.powerButtonBatteryStyles,
             bar.powerButtonBatteryStyle, "ring");
+        root.waveBatteryAnimationEnabled =
+            bar.waveBatteryAnimationEnabled === undefined
+                ? true : !!bar.waveBatteryAnimationEnabled;
+        root.waveBatteryAnimationFollowPowerProfile =
+            bar.waveBatteryAnimationFollowPowerProfile === undefined
+                ? true : !!bar.waveBatteryAnimationFollowPowerProfile;
         const extensionDefaults = {
             "appLauncher": false,
             "codexUsage": false,

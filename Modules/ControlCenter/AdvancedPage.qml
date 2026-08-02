@@ -36,8 +36,8 @@ StyledFlickable {
         ({ "id": "powerProfiles", "title": qsTr("电源模式选择器"),
            "description": qsTr("在快速设置中显示节能、平衡和性能模式"),
            "icon": "speed" }),
-        ({ "id": "batteryRing", "title": qsTr("电源键电量环"),
-           "description": qsTr("仅在检测到电池时显示环形电量"),
+        ({ "id": "batteryRing", "title": qsTr("电源键电量显示"),
+           "description": qsTr("仅在检测到电池时显示所选电量效果"),
            "icon": "battery_full" }),
         ({ "id": "powerProfileRefreshRate",
            "title": qsTr("电源模式联动刷新率"),
@@ -154,6 +154,7 @@ StyledFlickable {
                     }
                 }
             }
+
         }
 
         SettingsSection {
@@ -180,6 +181,29 @@ StyledFlickable {
                         onToggled: PersonalizationConfig
                             .setExtensionEnabled(modelData.id, checked)
                     }
+                }
+            }
+
+            SettingsRow {
+                Layout.fillWidth: true
+                visible: PersonalizationConfig
+                    .isExtensionEnabled("batteryRing")
+                iconName: "battery_android_frame_full"
+                title: qsTr("电量显示样式")
+                supportingText:
+                    PersonalizationConfig.powerButtonBatteryStyle === "wave"
+                    ? qsTr("淡色按钮内用深色波浪高度表示剩余电量")
+                    : qsTr("在电源按钮外围用进度圆环表示剩余电量")
+
+                trailing: StyledButtonGroup {
+                    model: PersonalizationConfig.powerButtonBatteryStyles
+                    currentValue:
+                        PersonalizationConfig.powerButtonBatteryStyle
+                    style: StyledButtonGroup.Style.Tonal
+                    buttonHeight: 34
+                    horizontalPadding: 16
+                    onValueSelected: value => PersonalizationConfig
+                        .setPowerButtonBatteryStyle(value)
                 }
             }
         }

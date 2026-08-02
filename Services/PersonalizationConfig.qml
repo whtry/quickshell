@@ -111,6 +111,12 @@ Singleton {
         ({ "value": "staggered", "label": qsTr("错落滚动") }),
         ({ "value": "simple", "label": qsTr("简洁数字") })
     ]
+    readonly property var powerButtonBatteryStyles: [
+        ({ "value": "ring", "label": qsTr("圆环"),
+           "icon": "donut_large" }),
+        ({ "value": "wave", "label": qsTr("波浪"),
+           "icon": "water" })
+    ]
 
     property bool storeReady: false
     property bool loading: false
@@ -188,6 +194,7 @@ Singleton {
     property string keystoneStyle: "bangs"
     property string powerMenuStyle: "grid"
     property string clockStyle: "staggered"
+    property string powerButtonBatteryStyle: "ring"
     property var barSystemMonitorMetrics: ({
         "cpu": true,
         "temperature": true,
@@ -777,6 +784,11 @@ Singleton {
             root.clockStyles, value, "staggered"));
     }
 
+    function setPowerButtonBatteryStyle(value) {
+        setValue("powerButtonBatteryStyle", normalizedOption(
+            root.powerButtonBatteryStyles, value, "ring"));
+    }
+
     function setShellBackgroundOpacity(value) {
         setValue("shellBackgroundOpacity",
             normalizedBoundedReal(value, 1.0, 0.0, 1.0));
@@ -903,7 +915,9 @@ Singleton {
             },
             "bar": {
                 "systemMonitorMetrics":
-                    root.cloneMap(root.barSystemMonitorMetrics)
+                    root.cloneMap(root.barSystemMonitorMetrics),
+                "powerButtonBatteryStyle":
+                    root.powerButtonBatteryStyle
             },
             "extensions": root.cloneMap(root.extensionComponents),
             "sounds": {
@@ -1064,6 +1078,9 @@ Singleton {
                     : metricDefaults[metricId];
         }
         root.barSystemMonitorMetrics = normalizedMetrics;
+        root.powerButtonBatteryStyle = normalizedOption(
+            root.powerButtonBatteryStyles,
+            bar.powerButtonBatteryStyle, "ring");
         const extensionDefaults = {
             "appLauncher": false,
             "codexUsage": false,

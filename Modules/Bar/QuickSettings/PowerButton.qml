@@ -15,8 +15,14 @@ Item {
     readonly property real batteryLevel: batteryAvailable
         ? Math.max(0, Math.min(1, Number(battery.chargePercent) / 100))
         : 0
-    readonly property bool showBatteryRing: batteryAvailable
+    readonly property bool showBatteryEffect: batteryAvailable
         && PersonalizationConfig.isExtensionEnabled("batteryRing")
+    readonly property bool showBatteryRing: showBatteryEffect
+        && PersonalizationConfig.powerButtonBatteryStyle === "ring"
+    readonly property bool showBatteryWave: showBatteryEffect
+        && PersonalizationConfig.powerButtonBatteryStyle === "wave"
+    readonly property bool batteryCharging:
+        String(battery.status || "").toLowerCase().indexOf("charg") >= 0
 
     implicitHeight: buttonSize
     implicitWidth: buttonSize
@@ -38,7 +44,92 @@ Item {
             width: root.showBatteryRing ? 21 : root.buttonSize
             height: width
             radius: height / 2
-            color: Appearance.colors.colError
+            color: root.showBatteryWave
+                ? Appearance.colors.colErrorContainer
+                : Appearance.colors.colError
+
+            Behavior on color {
+                ColorAnimation { duration: 180; easing.type: Easing.OutCubic }
+            }
+        }
+
+        Canvas {
+            id: batteryWave
+            anchors.fill: parent
+            visible: root.showBatteryWave
+            antialiasing: true
+            renderStrategy: Canvas.Threaded
+
+            property real displayedLevel: root.batteryLevel
+            property real phase: 0
+            property color fillColor: Appearance.colors.colError
+
+            Behavior on displayedLevel {
+                NumberAnimation { duration: 420; easing.type: Easing.OutCubic }
+            }
+
+            NumberAnimation on phase {
+                from: 0
+                to: Math.PI * 2
+                duration: 1800
+                loops: Animation.Infinite
+                easing.type: Easing.Linear
+                running: batteryWave.visible
+                    && (root.isHovered || root.batteryCharging)
+            }
+
+            onPaint: {
+                const context = getContext("2d")
+                context.reset()
+
+                if (displayedLevel <= 0)
+                    return
+
+                const center = width / 2
+                const radius = Math.min(width, height) / 2
+
+                context.save()
+                context.beginPath()
+                context.arc(center, center, radius, 0, Math.PI * 2)
+                context.clip()
+
+                if (displayedLevel >= 0.995) {
+                    context.fillStyle = fillColor
+                    context.fillRect(0, 0, width, height)
+                    context.restore()
+                    return
+                }
+
+                const levelY = height * (1 - displayedLevel)
+                const amplitude = Math.min(1.6,
+                    Math.max(0.7, height * 0.045))
+                context.beginPath()
+                context.moveTo(0,
+                    levelY + Math.sin(phase) * amplitude)
+                for (let x = 1; x <= width; x += 1) {
+                    const y = levelY + Math.sin(
+                        x * 0.34 + phase) * amplitude
+                    context.lineTo(x, y)
+                }
+                context.lineTo(width, height)
+                context.lineTo(0, height)
+                context.closePath()
+                context.fillStyle = fillColor
+                context.fill()
+                context.restore()
+            }
+
+            onDisplayedLevelChanged: requestPaint()
+            onPhaseChanged: requestPaint()
+            onFillColorChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onVisibleChanged: {
+                if (visible)
+                    requestPaint()
+            }
+
+            Component.onCompleted: requestPaint()
         }
 
         Canvas {
@@ -101,7 +192,13 @@ Item {
             font.family: Sizes.fontMaterialSymbols
             font.pixelSize: 18
             font.weight: Font.Normal
-            color: Appearance.colors.colOnError
+            color: root.showBatteryWave && root.batteryLevel < 0.5
+                ? Appearance.colors.colOnErrorContainer
+                : Appearance.colors.colOnError
+
+            Behavior on color {
+                ColorAnimation { duration: 180; easing.type: Easing.OutCubic }
+            }
         }
     }
 

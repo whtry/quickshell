@@ -41,7 +41,8 @@ key sysmon stream --format jsonl --interval 2000 --modules gpu
 ### 顶栏与快捷设置
 
 - 可在“设置 → 高级 → 扩展组件”中启用应用启动器、Codex 用量、电源模式
-  选择器和电源键电量环；这些非通用组件默认关闭。
+  选择器和电源键电量显示；电量可选择外围圆环或按钮内部波浪填充样式。
+  这些非通用组件默认关闭。
 - Codex 剩余额度显示需要
   [`codexbar`](https://github.com/steipete/codexbar)，默认从 `PATH` 查找，
   也可通过 `CLAVIS_CODEXBAR` 指定可执行文件。

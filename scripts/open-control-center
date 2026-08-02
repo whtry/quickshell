@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -u
 
-clavis_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/quickshell/clavis"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+clavis_dir="$(cd -- "${script_dir}/.." && pwd -P)"
 control_center="${clavis_dir}/controlcenter.qml"
 page="${1:-general}"
 build_dir="${clavis_dir}/core/build"

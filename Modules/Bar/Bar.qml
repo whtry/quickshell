@@ -62,6 +62,8 @@ Variants {
                 AppLauncher {
                     id: appLauncher
                     Layout.alignment: Qt.AlignVCenter
+                    visible: PersonalizationConfig
+                        .isExtensionEnabled("appLauncher")
                 }
                 Workspaces {
                     id: workspaces
@@ -96,6 +98,8 @@ Variants {
                 CodexUsage {
                     id: codexUsage
                     Layout.alignment: Qt.AlignVCenter
+                    visible: PersonalizationConfig
+                        .isExtensionEnabled("codexUsage")
                 }
 
                 QuickSettings {

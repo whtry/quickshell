@@ -323,6 +323,8 @@ WidgetPanel {
 
         PowerProfileSelector {
             Layout.fillWidth: true
+            visible: PersonalizationConfig
+                .isExtensionEnabled("powerProfiles")
         }
 
         Rectangle {

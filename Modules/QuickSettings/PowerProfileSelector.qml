@@ -17,19 +17,25 @@ Rectangle {
         {
             "id": "power-saver",
             "title": qsTr("节能"),
-            "subtitle": "60 Hz",
+            "subtitle": PersonalizationConfig
+                .isExtensionEnabled("powerProfileRefreshRate")
+                ? qsTr("约 60 Hz") : qsTr("系统默认"),
             "icon": "battery_saver"
         },
         {
             "id": "balanced",
             "title": qsTr("平衡"),
-            "subtitle": "120 Hz",
+            "subtitle": PersonalizationConfig
+                .isExtensionEnabled("powerProfileRefreshRate")
+                ? qsTr("最高 Hz") : qsTr("系统默认"),
             "icon": "balance"
         },
         {
             "id": "performance",
             "title": qsTr("性能"),
-            "subtitle": "120 Hz",
+            "subtitle": PersonalizationConfig
+                .isExtensionEnabled("powerProfileRefreshRate")
+                ? qsTr("最高 Hz") : qsTr("系统默认"),
             "icon": "speed"
         }
     ]
@@ -122,9 +128,12 @@ Rectangle {
                     extraVisibleCondition: mouseArea.containsMouse
                     text: profileButton.modelData.title
                         + qsTr("模式")
-                        + (profileButton.modelData.id === "power-saver"
-                            ? qsTr("\n自动将内屏切换为 60 Hz")
-                            : qsTr("\n自动将内屏恢复为 120 Hz"))
+                        + (PersonalizationConfig.isExtensionEnabled(
+                                "powerProfileRefreshRate")
+                            ? (profileButton.modelData.id === "power-saver"
+                                ? qsTr("\n自动选择当前分辨率约 60 Hz 的模式")
+                                : qsTr("\n自动选择当前分辨率的最高刷新率"))
+                            : qsTr("\n不会更改显示器刷新率"))
                 }
             }
         }

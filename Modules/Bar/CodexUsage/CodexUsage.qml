@@ -58,7 +58,14 @@ Item {
             usageProcess.running = true
     }
 
-    Component.onCompleted: refresh()
+    Component.onCompleted: {
+        if (visible)
+            refresh()
+    }
+    onVisibleChanged: {
+        if (visible)
+            refresh()
+    }
 
     Rectangle {
         id: background
@@ -152,7 +159,7 @@ Item {
 
     Timer {
         interval: 5 * 60 * 1000
-        running: true
+        running: root.visible
         repeat: true
         onTriggered: root.refresh()
     }

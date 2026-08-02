@@ -15,6 +15,8 @@ Item {
     readonly property real batteryLevel: batteryAvailable
         ? Math.max(0, Math.min(1, Number(battery.chargePercent) / 100))
         : 0
+    readonly property bool showBatteryRing: batteryAvailable
+        && PersonalizationConfig.isExtensionEnabled("batteryRing")
 
     implicitHeight: buttonSize
     implicitWidth: buttonSize
@@ -33,7 +35,7 @@ Item {
         Rectangle {
             id: background
             anchors.centerIn: parent
-            width: 21
+            width: root.showBatteryRing ? 21 : root.buttonSize
             height: width
             radius: height / 2
             color: Appearance.colors.colError
@@ -43,6 +45,7 @@ Item {
             id: batteryRing
             anchors.fill: parent
             antialiasing: true
+            visible: root.showBatteryRing
 
             property real displayedLevel: root.batteryLevel
             // Use a solid outline track so the complete enclosure stays

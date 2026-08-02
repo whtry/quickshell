@@ -26,6 +26,24 @@ StyledFlickable {
         ({ "id": "disk", "title": qsTr("硬盘占用"),
            "icon": "hard_drive" })
     ]
+    readonly property var extensionComponents: [
+        ({ "id": "appLauncher", "title": qsTr("顶栏应用启动器"),
+           "description": qsTr("在顶栏左侧显示应用启动按钮"),
+           "icon": "apps" }),
+        ({ "id": "codexUsage", "title": qsTr("Codex 用量"),
+           "description": qsTr("显示 Codex 账户剩余额度；需要安装 codexbar"),
+           "icon": "data_object" }),
+        ({ "id": "powerProfiles", "title": qsTr("电源模式选择器"),
+           "description": qsTr("在快速设置中显示节能、平衡和性能模式"),
+           "icon": "speed" }),
+        ({ "id": "batteryRing", "title": qsTr("电源键电量环"),
+           "description": qsTr("仅在检测到电池时显示环形电量"),
+           "icon": "battery_full" }),
+        ({ "id": "powerProfileRefreshRate",
+           "title": qsTr("电源模式联动刷新率"),
+           "description": qsTr("节能模式选择约 60 Hz，其他模式选择当前分辨率的最高刷新率"),
+           "icon": "display_settings" })
+    ]
     readonly property var templatePrograms: [
         ({
             "id": "btop",
@@ -133,6 +151,34 @@ StyledFlickable {
                             PersonalizationConfig
                                 .setBarSystemMonitorMetricEnabled(
                                     modelData.id, checked)
+                    }
+                }
+            }
+        }
+
+        SettingsSection {
+            Layout.fillWidth: true
+            title: qsTr("扩展组件")
+            supportingText: qsTr("这些功能不是 Clavis 的通用默认组件，可按设备和使用习惯单独启用。")
+
+            Repeater {
+                model: root.extensionComponents
+
+                SettingsRow {
+                    required property var modelData
+
+                    Layout.fillWidth: true
+                    iconName: modelData.icon
+                    title: modelData.title
+                    supportingText: modelData.description
+
+                    trailing: StyledSwitch {
+                        checked: PersonalizationConfig
+                            .isExtensionEnabled(modelData.id)
+                        Accessible.name:
+                            qsTr("启用%1").arg(modelData.title)
+                        onToggled: PersonalizationConfig
+                            .setExtensionEnabled(modelData.id, checked)
                     }
                 }
             }

@@ -196,6 +196,13 @@ Singleton {
         "gpuPower": false,
         "disk": false
     })
+    property var extensionComponents: ({
+        "appLauncher": false,
+        "codexUsage": false,
+        "powerProfiles": false,
+        "batteryRing": false,
+        "powerProfileRefreshRate": false
+    })
 
     property real shellBackgroundOpacity: 1.0
     property bool shellBlurEnabled: false
@@ -717,6 +724,23 @@ Singleton {
         root.save();
     }
 
+    function isExtensionEnabled(id) {
+        return root.extensionComponents[id] === true;
+    }
+
+    function setExtensionEnabled(id, enabled) {
+        const supported = [
+            "appLauncher", "codexUsage", "powerProfiles",
+            "batteryRing", "powerProfileRefreshRate"
+        ];
+        if (supported.indexOf(id) < 0)
+            return;
+        const next = root.cloneMap(root.extensionComponents);
+        next[id] = !!enabled;
+        root.extensionComponents = next;
+        root.save();
+    }
+
     function setCursorTheme(value) {
         setValue("cursorTheme", value || "");
     }
@@ -881,6 +905,7 @@ Singleton {
                 "systemMonitorMetrics":
                     root.cloneMap(root.barSystemMonitorMetrics)
             },
+            "extensions": root.cloneMap(root.extensionComponents),
             "sounds": {
                 "pomodoro": root.pomodoroSoundEnabled
             },
@@ -904,6 +929,7 @@ Singleton {
         const effects = parsed.effects || {};
         const keystone = parsed.keystone || {};
         const bar = parsed.bar || {};
+        const extensions = parsed.extensions || {};
         const sounds = parsed.sounds || {};
         const sidebar = parsed.sidebar || {};
         const interactions = parsed.interactions || {};
@@ -1038,6 +1064,21 @@ Singleton {
                     : metricDefaults[metricId];
         }
         root.barSystemMonitorMetrics = normalizedMetrics;
+        const extensionDefaults = {
+            "appLauncher": false,
+            "codexUsage": false,
+            "powerProfiles": false,
+            "batteryRing": false,
+            "powerProfileRefreshRate": false
+        };
+        const normalizedExtensions = {};
+        for (let extensionId in extensionDefaults) {
+            normalizedExtensions[extensionId] =
+                typeof extensions[extensionId] === "boolean"
+                    ? extensions[extensionId]
+                    : extensionDefaults[extensionId];
+        }
+        root.extensionComponents = normalizedExtensions;
         root.pomodoroSoundEnabled = !!sounds.pomodoro;
         root.keepSidebarsLoaded = sidebar.keepLoaded === undefined
             ? true : !!sidebar.keepLoaded;

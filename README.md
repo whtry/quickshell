@@ -40,19 +40,22 @@ key sysmon stream --format jsonl --interval 2000 --modules gpu
 
 ### 顶栏与快捷设置
 
-- 左上角新增应用启动器按钮。
-- 新增 Codex 剩余额度显示；需要
+- 可在“设置 → 高级 → 扩展组件”中启用应用启动器、Codex 用量、电源模式
+  选择器和电源键电量环；这些非通用组件默认关闭。
+- Codex 剩余额度显示需要
   [`codexbar`](https://github.com/steipete/codexbar)，默认从 `PATH` 查找，
   也可通过 `CLAVIS_CODEXBAR` 指定可执行文件。
-- 新增节能、平衡、性能三档电源模式，并联动 Niri 输出刷新率：节能模式切换
-  60 Hz，平衡和性能模式恢复 120 Hz。
+- 电源模式提供节能、平衡、性能三档。刷新率联动需要单独开启：程序会在
+  当前分辨率中动态选择最接近 60 Hz 的模式用于节能，并为其他模式选择最高
+  刷新率，不包含机器专属的默认输出名或分辨率。
 
-显示器名称和模式可通过启动 Clavis 时设置以下环境变量覆盖：
+如需强制指定特殊显示器模式，可在启动 Clavis 时设置以下环境变量；三项必须
+同时提供：
 
 ```bash
-export CLAVIS_INTERNAL_OUTPUT=eDP-1
-export CLAVIS_POWER_SAVER_MODE='2880x1800@60.000'
-export CLAVIS_NORMAL_MODE='2880x1800@120.000'
+export CLAVIS_INTERNAL_OUTPUT='<output-name>'
+export CLAVIS_POWER_SAVER_MODE='<width>x<height>@<refresh>'
+export CLAVIS_NORMAL_MODE='<width>x<height>@<refresh>'
 ```
 
 ### 其他体验改进

@@ -1,11 +1,13 @@
 pragma Singleton
 
 import Quickshell
+import qs.Common
 
 Singleton {
     function toggle() {
         Quickshell.execDetached([
-            "qs", "-c", "clavis", "ipc", "call", "launcher", "toggle"
+            "qs", "--path", Paths.shellDir,
+            "ipc", "call", "spotlight", "toggle"
         ]);
     }
 }

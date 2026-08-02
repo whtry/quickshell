@@ -13,29 +13,33 @@ Rectangle {
     radius: Appearance.rounding.large
     color: Appearance.colors.colLayer1
 
+    function subtitleForProfile(profileId) {
+        if (!PersonalizationConfig.isExtensionEnabled(
+                "powerProfileRefreshRate"))
+            return qsTr("系统默认");
+
+        const refreshHz = profileId === "power-saver"
+            ? PowerProfileService.powerSaverRefreshHz
+            : PowerProfileService.normalRefreshHz;
+        return refreshHz > 0
+            ? refreshHz + " Hz"
+            : qsTr("检测中");
+    }
+
     readonly property var profiles: [
         {
             "id": "power-saver",
             "title": qsTr("节能"),
-            "subtitle": PersonalizationConfig
-                .isExtensionEnabled("powerProfileRefreshRate")
-                ? qsTr("约 60 Hz") : qsTr("系统默认"),
             "icon": "battery_saver"
         },
         {
             "id": "balanced",
             "title": qsTr("平衡"),
-            "subtitle": PersonalizationConfig
-                .isExtensionEnabled("powerProfileRefreshRate")
-                ? qsTr("最高 Hz") : qsTr("系统默认"),
             "icon": "balance"
         },
         {
             "id": "performance",
             "title": qsTr("性能"),
-            "subtitle": PersonalizationConfig
-                .isExtensionEnabled("powerProfileRefreshRate")
-                ? qsTr("最高 Hz") : qsTr("系统默认"),
             "icon": "speed"
         }
     ]
@@ -101,7 +105,8 @@ Rectangle {
 
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: profileButton.modelData.subtitle
+                        text: root.subtitleForProfile(
+                            profileButton.modelData.id)
                         color: profileButton.selected
                             ? Appearance.transparentize(
                                 Appearance.colors.colOnPrimary, 0.25)

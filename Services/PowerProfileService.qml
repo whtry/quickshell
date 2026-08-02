@@ -18,6 +18,8 @@ Singleton {
     property bool available: false
     property bool busy: false
     property string lastError: ""
+    property int powerSaverRefreshHz: 0
+    property int normalRefreshHz: 0
 
     function validProfile(value) {
         return value === "power-saver"
@@ -50,6 +52,10 @@ Singleton {
             && root.configuredPowerSaverMode.length > 0
             && root.configuredNormalMode.length > 0;
         if (hasConfiguredModes) {
+            root.powerSaverRefreshHz = root.refreshHzFromModeText(
+                root.configuredPowerSaverMode);
+            root.normalRefreshHz = root.refreshHzFromModeText(
+                root.configuredNormalMode);
             refreshRateWriter.command = [
                 "niri", "msg", "output", root.configuredOutput, "mode",
                 root.profile === "power-saver"
@@ -67,6 +73,11 @@ Singleton {
     function modeText(mode) {
         return Number(mode.width) + "x" + Number(mode.height) + "@"
             + (Number(mode.refresh_rate) / 1000).toFixed(3);
+    }
+
+    function refreshHzFromModeText(mode) {
+        const match = String(mode || "").match(/@([0-9]+(?:\.[0-9]+)?)/);
+        return match ? Math.round(Number(match[1])) : 0;
     }
 
     function applyDetectedRefreshRate(outputs) {
@@ -97,17 +108,20 @@ Singleton {
         if (matching.length === 0)
             return;
 
-        let desired = matching[0];
-        if (root.profile === "power-saver") {
-            desired = matching.reduce((best, mode) =>
-                Math.abs(Number(mode.refresh_rate) - 60000)
-                    < Math.abs(Number(best.refresh_rate) - 60000)
-                    ? mode : best, matching[0]);
-        } else {
-            desired = matching.reduce((best, mode) =>
-                Number(mode.refresh_rate) > Number(best.refresh_rate)
-                    ? mode : best, matching[0]);
-        }
+        const saverMode = matching.reduce((best, mode) =>
+            Math.abs(Number(mode.refresh_rate) - 60000)
+                < Math.abs(Number(best.refresh_rate) - 60000)
+                ? mode : best, matching[0]);
+        const normalMode = matching.reduce((best, mode) =>
+            Number(mode.refresh_rate) > Number(best.refresh_rate)
+                ? mode : best, matching[0]);
+        root.powerSaverRefreshHz = Math.round(
+            Number(saverMode.refresh_rate) / 1000);
+        root.normalRefreshHz = Math.round(
+            Number(normalMode.refresh_rate) / 1000);
+
+        const desired = root.profile === "power-saver"
+            ? saverMode : normalMode;
 
         if (Number(desired.refresh_rate) === Number(current.refresh_rate))
             return;

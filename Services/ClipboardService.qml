@@ -7,7 +7,6 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property int requiredSchemaVersion: 2
     property string commandName: {
         const configured = String(
             Quickshell.env("CLAVIS_KEY") || ""
@@ -27,7 +26,7 @@ Singleton {
     property bool watcherRunning: false
     property var dependencies: ({ cliphist: false, wlCopy: false })
     property var capabilities: ({ inspect: false, preview: false,
-        mimeRestore: false })
+        mimeRestore: false, mimeAwareStore: false })
     property var entries: []
     property var detailsById: ({})
     property var error: null
@@ -120,11 +119,10 @@ Singleton {
 
     function responseIsCurrent(response) {
         return response
-            && Number(response.schemaVersion || 0)
-                >= root.requiredSchemaVersion
             && response.capabilities
             && response.capabilities.inspect === true
-            && response.capabilities.mimeRestore === true;
+            && response.capabilities.mimeRestore === true
+            && response.capabilities.mimeAwareStore === true;
     }
 
     function applyListResponse(text) {
@@ -264,17 +262,6 @@ Singleton {
                               failure.code, failure.message);
             return;
         }
-        if (Number(response.schemaVersion || 0)
-                < root.requiredSchemaVersion) {
-            const failure = root.normalizedError(
-                null, "stale_key_cli",
-                qsTr("当前 key CLI 不支持新版剪贴板协议"));
-            root.lastActionError = failure;
-            root.actionFailed(root._actionName, root._actionId,
-                              failure.code, failure.message);
-            return;
-        }
-
         root.lastActionError = null;
         const responseId = String(response.id || root._actionId);
         if (root._actionName === "restore") {
@@ -351,9 +338,7 @@ Singleton {
         const id = root._inspectId;
         const response = root.parseResponse(root._inspectOutput);
         if (root._inspectExitCode === 0 && response
-                && response.ok === true
-                && Number(response.schemaVersion || 0)
-                    >= root.requiredSchemaVersion) {
+                && response.ok === true) {
             const nextDetails = Object.assign({}, root.detailsById);
             nextDetails[id] = response;
             root.detailsById = nextDetails;

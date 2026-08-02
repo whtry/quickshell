@@ -479,6 +479,10 @@ PanelWindow {
         return resultsPanel.clipboardActivationAreaAt(index);
     }
 
+    function clipboardLayoutAt(index) {
+        return resultsPanel.clipboardLayoutAt(index);
+    }
+
     function webPressDepthAt(progress) {
         return searchBar.pressDepthForProgress(progress);
     }

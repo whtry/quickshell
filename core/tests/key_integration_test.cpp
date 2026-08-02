@@ -35,6 +35,9 @@ private slots:
     void clipboardRestoresOriginalBytes();
     void clipboardRestoresImageWithMime();
     void clipboardInspectsTextAndImage();
+    void clipboardStoresPreferredMime();
+    void clipboardHandlesHtmlImages();
+    void clipboardFormatsMultilineText();
     void clipboardClassifiesFiles();
     void clipboardReportsDecodeAndCopyFailures();
     void clipboardPreviewCacheIsCleaned();
@@ -269,7 +272,7 @@ void KeyIntegrationTest::clipboardListIsStructured()
     QCOMPARE(entries.at(1).toObject()
                  .value(QStringLiteral("payloadKind")).toString(),
              QStringLiteral("image"));
-    QCOMPARE(result.json.value(QStringLiteral("schemaVersion")).toInt(), 2);
+    QVERIFY(!result.json.contains(QStringLiteral("schemaVersion")));
     QCOMPARE(result.json.value(QStringLiteral("capabilities")).toObject()
                  .value(QStringLiteral("inspect")).toBool(), true);
 }
@@ -397,7 +400,11 @@ void KeyIntegrationTest::clipboardInspectsTextAndImage()
     QCOMPARE(code.json.value(QStringLiteral("payloadKind")).toString(),
              QStringLiteral("text"));
     QCOMPARE(code.json.value(QStringLiteral("textSubtype")).toString(),
-             QStringLiteral("code"));
+             QStringLiteral("plain"));
+    QCOMPARE(code.json.value(QStringLiteral("title")).toString(),
+             QStringLiteral("const value = items.map(item => {"));
+    QCOMPARE(code.json.value(QStringLiteral("subtitle")).toString(),
+             QStringLiteral("return item.id;…"));
 
     const KeyResult url = runKey({
         QStringLiteral("clipboard"), QStringLiteral("inspect"),
@@ -418,6 +425,170 @@ void KeyIntegrationTest::clipboardInspectsTextAndImage()
              QStringLiteral("binary"));
     QCOMPARE(damagedImage.json.value(QStringLiteral("previewUrl")).toString(),
              QString());
+}
+
+void KeyIntegrationTest::clipboardStoresPreferredMime()
+{
+    const QString trace =
+        m_temporary->filePath(QStringLiteral("clipboard-store-trace"));
+    m_environment.insert(QStringLiteral("CLAVIS_TEST_CLIPBOARD_TRACE"), trace);
+    m_environment.insert(
+        QStringLiteral("CLAVIS_TEST_SELECTION_TYPES"),
+        QStringLiteral("text/html\ntext/plain;charset=utf-8\nimage/png\n"));
+
+    const KeyResult image = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("store"),
+        QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(image.exitCode, 0);
+    QCOMPARE(image.json.value(QStringLiteral("selectedMime")).toString(),
+             QStringLiteral("image/png"));
+    QVERIFY(!image.json.contains(QStringLiteral("schemaVersion")));
+    QFile traceFile(trace);
+    QVERIFY(traceFile.open(QIODevice::ReadOnly));
+    QVERIFY(traceFile.readAll().startsWith(QByteArrayLiteral("store:\x89PNG")));
+    traceFile.close();
+    QVERIFY(traceFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    traceFile.close();
+
+    m_environment.insert(
+        QStringLiteral("CLAVIS_TEST_SELECTION_TYPES"),
+        QStringLiteral("text/html\ntext/plain;charset=utf-8\n"));
+    m_environment.insert(QStringLiteral("CLAVIS_TEST_SELECTION_TEXT"),
+                         QStringLiteral("plain browser text"));
+    const KeyResult text = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("store"),
+        QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(text.exitCode, 0);
+    QCOMPARE(text.json.value(QStringLiteral("selectedMime")).toString(),
+             QStringLiteral("text/plain;charset=utf-8"));
+    QVERIFY(traceFile.open(QIODevice::ReadOnly));
+    QCOMPARE(traceFile.readAll(), QByteArrayLiteral("store:plain browser text"));
+}
+
+void KeyIntegrationTest::clipboardHandlesHtmlImages()
+{
+    const KeyResult embedded = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("inspect"),
+        QStringLiteral("11"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(embedded.exitCode, 0);
+    QCOMPARE(embedded.json.value(QStringLiteral("payloadKind")).toString(),
+             QStringLiteral("image"));
+    QCOMPARE(embedded.json.value(QStringLiteral("mimeType")).toString(),
+             QStringLiteral("image/png"));
+    QVERIFY(!embedded.json.value(QStringLiteral("previewUrl")).toString().isEmpty());
+
+    const QString trace =
+        m_temporary->filePath(QStringLiteral("embedded-image-restore"));
+    const QString arguments =
+        m_temporary->filePath(QStringLiteral("embedded-image-arguments"));
+    m_environment.insert(QStringLiteral("CLAVIS_TEST_CLIPBOARD_TRACE"), trace);
+    m_environment.insert(QStringLiteral("CLAVIS_TEST_WL_COPY_ARGUMENTS"),
+                         arguments);
+    const KeyResult restore = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("restore"),
+        QStringLiteral("11"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(restore.exitCode, 0);
+    QFile traceFile(trace);
+    QVERIFY(traceFile.open(QIODevice::ReadOnly));
+    QVERIFY(traceFile.readAll().startsWith(QByteArrayLiteral("copy:\x89PNG")));
+    QFile argumentsFile(arguments);
+    QVERIFY(argumentsFile.open(QIODevice::ReadOnly));
+    QCOMPARE(argumentsFile.readAll(), QByteArrayLiteral("--type\nimage/png"));
+
+    const KeyResult remote = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("inspect"),
+        QStringLiteral("12"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(remote.exitCode, 0);
+    QCOMPARE(remote.json.value(QStringLiteral("payloadKind")).toString(),
+             QStringLiteral("text"));
+    QCOMPARE(remote.json.value(QStringLiteral("title")).toString(),
+             QStringLiteral("图片引用"));
+    QVERIFY(!remote.json.value(QStringLiteral("title")).toString().contains(
+        QStringLiteral("<img")));
+    QVERIFY(!remote.json.value(QStringLiteral("subtitle")).toString().contains(
+        QStringLiteral("private=1")));
+    QCOMPARE(remote.json.value(QStringLiteral("htmlFallback")).toBool(), true);
+}
+
+void KeyIntegrationTest::clipboardFormatsMultilineText()
+{
+    const KeyResult oneLine = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("inspect"),
+        QStringLiteral("16"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(oneLine.exitCode, 0);
+    QCOMPARE(oneLine.json.value(QStringLiteral("title")).toString(),
+             QStringLiteral("Hello world"));
+    QCOMPARE(oneLine.json.value(QStringLiteral("subtitle")).toString(),
+             QStringLiteral("文本"));
+    QCOMPARE(oneLine.json.value(QStringLiteral("multiline")).toBool(), false);
+
+    const KeyResult twoLines = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("inspect"),
+        QStringLiteral("9"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(twoLines.exitCode, 0);
+    QCOMPARE(twoLines.json.value(QStringLiteral("title")).toString(),
+             QStringLiteral("alpha"));
+    QCOMPARE(twoLines.json.value(QStringLiteral("subtitle")).toString(),
+             QStringLiteral("beta"));
+    QCOMPARE(twoLines.json.value(QStringLiteral("multiline")).toBool(), true);
+
+    const KeyResult poem = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("inspect"),
+        QStringLiteral("13"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(poem.exitCode, 0);
+    QCOMPARE(poem.json.value(QStringLiteral("title")).toString(),
+             QStringLiteral("床前明月光，"));
+    QCOMPARE(poem.json.value(QStringLiteral("subtitle")).toString(),
+             QStringLiteral("疑是地上霜。…"));
+    QCOMPARE(poem.json.value(QStringLiteral("lineCount")).toInt(), 4);
+    QVERIFY(!poem.json.value(QStringLiteral("title")).toString().contains('\n'));
+    QVERIFY(!poem.json.value(QStringLiteral("subtitle")).toString().contains('\n'));
+
+    const KeyResult whitespace = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("inspect"),
+        QStringLiteral("14"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(whitespace.exitCode, 0);
+    QCOMPARE(whitespace.json.value(QStringLiteral("title")).toString(),
+             QStringLiteral("first line"));
+    QCOMPARE(whitespace.json.value(QStringLiteral("subtitle")).toString(),
+             QStringLiteral("second line…"));
+
+    const KeyResult sourceText = runKey({
+        QStringLiteral("clipboard"), QStringLiteral("inspect"),
+        QStringLiteral("15"), QStringLiteral("--format"), QStringLiteral("json"),
+    });
+    QCOMPARE(sourceText.exitCode, 0);
+    QCOMPARE(sourceText.json.value(QStringLiteral("textSubtype")).toString(),
+             QStringLiteral("plain"));
+    QCOMPARE(sourceText.json.value(QStringLiteral("icon")).toString(),
+             QStringLiteral("content_paste"));
+    QVERIFY(!sourceText.json.value(QStringLiteral("subtitle")).toString()
+                 .startsWith(QStringLiteral("代码")));
+
+    const QString restoreTrace =
+        m_temporary->filePath(QStringLiteral("poem-restore-trace"));
+    m_environment.insert(QStringLiteral("CLAVIS_TEST_CLIPBOARD_TRACE"),
+                         restoreTrace);
+    QCOMPARE(runKey({
+        QStringLiteral("clipboard"), QStringLiteral("restore"),
+        QStringLiteral("13"), QStringLiteral("--format"), QStringLiteral("json"),
+    }).exitCode, 0);
+    QFile restoreFile(restoreTrace);
+    QVERIFY(restoreFile.open(QIODevice::ReadOnly));
+    QCOMPARE(restoreFile.readAll(), QByteArrayLiteral(
+        "copy:床前明月光，\n"
+        "疑是地上霜。\n"
+        "举头望明月，\n"
+        "低头思故乡。"));
 }
 
 void KeyIntegrationTest::clipboardClassifiesFiles()
@@ -714,7 +885,11 @@ KeyIntegrationTest::KeyResult KeyIntegrationTest::runKey(const QStringList &argu
     process.setProgram(QStringLiteral(KEY_EXECUTABLE));
     process.setArguments(arguments);
     process.start();
-    if (!process.waitForStarted(5000) || !process.waitForFinished(timeoutMs)) {
+    if (!process.waitForStarted(5000)) {
+        return {-999, {}, process.readAllStandardError()};
+    }
+    process.closeWriteChannel();
+    if (!process.waitForFinished(timeoutMs)) {
         process.kill();
         process.waitForFinished(1000);
         return {-999, {}, process.readAllStandardError()};

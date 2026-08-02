@@ -53,6 +53,41 @@ int main(int argc, char *argv[])
         return appendTrace(QByteArrayLiteral("copy:") + input) ? 0 : 1;
     }
 
+    if (executable == QStringLiteral("wl-paste")) {
+        const QStringList arguments = application.arguments().mid(1);
+        if (arguments.contains(QStringLiteral("--list-types"))) {
+            const QByteArray types = qgetenv("CLAVIS_TEST_SELECTION_TYPES");
+            const QByteArray output = types.isEmpty()
+                ? QByteArrayLiteral("text/plain;charset=utf-8\ntext/html\n")
+                : types;
+            fwrite(output.constData(), 1,
+                   static_cast<size_t>(output.size()), stdout);
+            return 0;
+        }
+        const int typeIndex = arguments.indexOf(QStringLiteral("--type"));
+        if (typeIndex >= 0 && typeIndex + 1 < arguments.size()) {
+            const QString mime = arguments.at(typeIndex + 1);
+            QByteArray payload;
+            if (mime.startsWith(QStringLiteral("image/"))) {
+                payload = QByteArray::fromBase64(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
+                    "AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+            } else if (mime == QStringLiteral("text/html")) {
+                payload = qgetenv("CLAVIS_TEST_SELECTION_HTML");
+                if (payload.isEmpty())
+                    payload = QByteArrayLiteral("<meta><img src=\"https://example.com/a.png\">");
+            } else {
+                payload = qgetenv("CLAVIS_TEST_SELECTION_TEXT");
+                if (payload.isEmpty())
+                    payload = QByteArrayLiteral("plain selection");
+            }
+            fwrite(payload.constData(), 1,
+                   static_cast<size_t>(payload.size()), stdout);
+            return 0;
+        }
+        return 2;
+    }
+
     const QStringList arguments = application.arguments().mid(1);
     const QString command = arguments.value(0);
     if (command == QStringLiteral("list")) {
@@ -60,7 +95,9 @@ int main(int argc, char *argv[])
             << "9\talpha beta\n"
             << "8\t[[ binary data 68 B png 1x1 ]]\n"
             << "7\tfile reference\n"
-            << "6\tmultiple files\n";
+            << "6\tmultiple files\n"
+            << "12\t<meta><img src=\"https://example.com/a.png\">\n"
+            << "13\t床前明月光，\n";
         return 0;
     }
     if (command == QStringLiteral("decode")) {
@@ -69,7 +106,34 @@ int main(int argc, char *argv[])
         const QByteArray id = readStdin();
         const QString root = qEnvironmentVariable("CLAVIS_TEST_FILE_ROOT");
         QByteArray payload;
-        if (id == QByteArrayLiteral("10")) {
+        if (id == QByteArrayLiteral("16")) {
+            payload = QByteArrayLiteral("Hello world");
+        } else if (id == QByteArrayLiteral("15")) {
+            payload = QByteArrayLiteral(
+                "# heading\n"
+                "const value = items.map(item => {\n"
+                "  return item.id;\n"
+                "});\n");
+        } else if (id == QByteArrayLiteral("14")) {
+            payload = QByteArrayLiteral(
+                "\n\t  first line  \n\n\tsecond\tline\n\nthird\n\n");
+        } else if (id == QByteArrayLiteral("13")) {
+            payload = QByteArrayLiteral(
+                "床前明月光，\n"
+                "疑是地上霜。\n"
+                "举头望明月，\n"
+                "低头思故乡。");
+        } else if (id == QByteArrayLiteral("12")) {
+            payload = QByteArrayLiteral(
+                "<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">"
+                "<img src=\"https://images.example.test/photo.png?private=1\">");
+        } else if (id == QByteArrayLiteral("11")) {
+            payload = QByteArrayLiteral(
+                "<meta><img src=\"data:image/png;base64,"
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
+                "AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                "\">");
+        } else if (id == QByteArrayLiteral("10")) {
             payload = QByteArrayLiteral("\x89PNG\r\n\x1a\ncorrupt");
         } else if (id == QByteArrayLiteral("9")) {
             payload = QByteArrayLiteral("alpha\nbeta");
@@ -131,6 +195,10 @@ int main(int argc, char *argv[])
             return 1;
         return appendTrace(QByteArrayLiteral("delete:") + id + '\n')
             ? 0 : 1;
+    }
+    if (command == QStringLiteral("store")) {
+        const QByteArray payload = readStdin();
+        return appendTrace(QByteArrayLiteral("store:") + payload) ? 0 : 1;
     }
     if (command == QStringLiteral("wipe"))
         return appendTrace(QByteArrayLiteral("wipe\n")) ? 0 : 1;

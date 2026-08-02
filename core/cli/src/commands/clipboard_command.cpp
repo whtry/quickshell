@@ -18,10 +18,10 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <cstdio>
 
 namespace {
 
-constexpr int SchemaVersion = 2;
 constexpr int Success = 0;
 constexpr int UsageError = 2;
 constexpr int DependencyFailure = 3;
@@ -47,6 +47,7 @@ struct PayloadInspection {
     QString errorMessage;
     QString mimeType;
     QJsonObject json;
+    QByteArray restoreBytes;
 };
 
 ProcessResult runProcess(const QString &program,
@@ -78,12 +79,78 @@ ProcessResult runProcess(const QString &program,
     return result;
 }
 
-QJsonObject dependencyObject(const QString &cliphist, const QString &wlCopy)
+void drainStandardInput()
 {
-    return {
+    QFile input;
+    if (!input.open(stdin, QIODevice::ReadOnly))
+        return;
+    QByteArray buffer(64 * 1024, Qt::Uninitialized);
+    while (input.read(buffer.data(), buffer.size()) > 0) {
+    }
+}
+
+QString preferredSelectionMime(const QByteArray &rawTypes)
+{
+    QStringList types;
+    for (const QByteArray &rawType : rawTypes.split('\n')) {
+        const QString type = QString::fromUtf8(rawType).trimmed();
+        if (!type.isEmpty() && !types.contains(type))
+            types.append(type);
+    }
+
+    const QStringList preferredImages{
+        QStringLiteral("image/png"),
+        QStringLiteral("image/jpeg"),
+        QStringLiteral("image/webp"),
+        QStringLiteral("image/gif"),
+    };
+    for (const QString &mime : preferredImages) {
+        if (types.contains(mime, Qt::CaseInsensitive))
+            return mime;
+    }
+
+    QStringList supportedImages;
+    for (const QByteArray &mime : QImageReader::supportedMimeTypes())
+        supportedImages.append(QString::fromLatin1(mime));
+    for (const QString &type : types) {
+        if (type.startsWith(QStringLiteral("image/"), Qt::CaseInsensitive)
+            && supportedImages.contains(type, Qt::CaseInsensitive)) {
+            return type;
+        }
+    }
+
+    const QStringList preferredPlainText{
+        QStringLiteral("text/plain;charset=utf-8"),
+        QStringLiteral("text/plain;charset=UTF-8"),
+        QStringLiteral("text/plain"),
+        QStringLiteral("UTF8_STRING"),
+    };
+    for (const QString &mime : preferredPlainText) {
+        if (types.contains(mime, Qt::CaseInsensitive))
+            return mime;
+    }
+    for (const QString &type : types) {
+        if (type.startsWith(QStringLiteral("text/plain"),
+                            Qt::CaseInsensitive)) {
+            return type;
+        }
+    }
+    if (types.contains(QStringLiteral("text/html"), Qt::CaseInsensitive))
+        return QStringLiteral("text/html");
+    return {};
+}
+
+QJsonObject dependencyObject(const QString &cliphist,
+                             const QString &wlCopy,
+                             const QString &wlPaste = {})
+{
+    QJsonObject dependencies{
         {QStringLiteral("cliphist"), !cliphist.isEmpty()},
         {QStringLiteral("wlCopy"), !wlCopy.isEmpty()},
     };
+    if (!wlPaste.isNull())
+        dependencies.insert(QStringLiteral("wlPaste"), !wlPaste.isEmpty());
+    return dependencies;
 }
 
 QJsonObject errorObject(const QString &code, const QString &message)
@@ -102,7 +169,6 @@ CommandResult resultFor(const QString &command,
                         bool textIsError)
 {
     QJsonObject json{
-        {QStringLiteral("schemaVersion"), SchemaVersion},
         {QStringLiteral("command"), command},
         {QStringLiteral("ok"), exitCode == Success},
     };
@@ -173,14 +239,19 @@ bool clipboardWatcherRunning()
             continue;
         const QList<QByteArray> arguments = commandLine.readAll().split('\0');
         bool hasCliphist = false;
+        bool hasKey = false;
+        bool hasClipboard = false;
         bool hasStore = false;
         for (const QByteArray &argument : arguments) {
             const QString value = QString::fromLocal8Bit(argument);
             hasCliphist = hasCliphist
                 || QFileInfo(value).fileName() == QStringLiteral("cliphist");
+            hasKey = hasKey || QFileInfo(value).fileName() == QStringLiteral("key");
+            hasClipboard = hasClipboard || value == QStringLiteral("clipboard");
             hasStore = hasStore || value == QStringLiteral("store");
         }
-        if (hasCliphist && hasStore)
+        if ((hasCliphist && hasStore)
+            || (hasKey && hasClipboard && hasStore))
             return true;
     }
     return false;
@@ -405,22 +476,118 @@ QString writeImagePreview(const QString &id,
     return QUrl::fromLocalFile(path).toString();
 }
 
-bool likelyCode(const QString &text)
+QString sanitizedDisplayLine(QString line)
 {
-    if (text.count(QLatin1Char('\n')) < 2 || text.size() < 24)
-        return false;
-    int syntaxSignals = 0;
-    const QStringList patterns{
-        QStringLiteral("\\b(class|struct|function|const|let|var|import|return)\\b"),
-        QStringLiteral("[{};]"),
-        QStringLiteral("(^|\\n)\\s*(def|fn|func|#include|package)\\b"),
-        QStringLiteral("(=>|::|==|!=|&&|\\|\\|)"),
-    };
-    for (const QString &pattern : patterns) {
-        if (QRegularExpression(pattern).match(text).hasMatch())
-            ++syntaxSignals;
+    line = line.trimmed();
+    for (QChar &character : line) {
+        if (character == QLatin1Char('\t')
+            || (character.category() == QChar::Other_Control
+                && character != QChar::Null)) {
+            character = QLatin1Char(' ');
+        }
     }
-    return syntaxSignals >= 2;
+    return line;
+}
+
+struct TextDisplay {
+    QString title;
+    QString subtitle;
+    int lineCount = 0;
+    bool multiline = false;
+};
+
+TextDisplay textDisplay(const QString &text)
+{
+    QString normalized = text;
+    normalized.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+    normalized.replace(QLatin1Char('\r'), QLatin1Char('\n'));
+
+    QStringList effectiveLines;
+    for (const QString &line : normalized.split(QLatin1Char('\n'))) {
+        const QString displayLine = sanitizedDisplayLine(line);
+        if (!displayLine.isEmpty())
+            effectiveLines.append(displayLine);
+    }
+
+    TextDisplay display;
+    display.lineCount = effectiveLines.size();
+    display.multiline = effectiveLines.size() > 1;
+    if (effectiveLines.isEmpty()) {
+        display.title = QStringLiteral("空文本");
+        display.subtitle = QStringLiteral("文本");
+        return display;
+    }
+    display.title = effectiveLines.first();
+    if (effectiveLines.size() == 1) {
+        display.subtitle = QStringLiteral("文本");
+    } else {
+        display.subtitle = effectiveLines.at(1);
+        if (effectiveLines.size() > 2)
+            display.subtitle.append(QChar(0x2026));
+    }
+    return display;
+}
+
+bool looksLikeHtml(const QString &text)
+{
+    static const QRegularExpression expression(
+        QStringLiteral("^\\s*(?:<!doctype\\b|<html\\b|<meta\\b|<img\\b|<div\\b|<span\\b)"),
+        QRegularExpression::CaseInsensitiveOption);
+    return expression.match(text).hasMatch();
+}
+
+QString decodeHtmlEntities(QString text)
+{
+    text.replace(QStringLiteral("&lt;"), QStringLiteral("<"),
+                 Qt::CaseInsensitive);
+    text.replace(QStringLiteral("&gt;"), QStringLiteral(">"),
+                 Qt::CaseInsensitive);
+    text.replace(QStringLiteral("&quot;"), QStringLiteral("\""),
+                 Qt::CaseInsensitive);
+    text.replace(QStringLiteral("&apos;"), QStringLiteral("'"),
+                 Qt::CaseInsensitive);
+    text.replace(QStringLiteral("&#39;"), QStringLiteral("'"),
+                 Qt::CaseInsensitive);
+    // Decode ampersand last so an encoded "&amp;lt;" is not decoded twice.
+    text.replace(QStringLiteral("&amp;"), QStringLiteral("&"),
+                 Qt::CaseInsensitive);
+    return text;
+}
+
+QString htmlImageSource(const QString &html)
+{
+    static const QRegularExpression imageExpression(
+        QStringLiteral("<img\\b[^>]*\\bsrc\\s*=\\s*(['\\\"])(.*?)\\1"),
+        QRegularExpression::CaseInsensitiveOption
+            | QRegularExpression::DotMatchesEverythingOption);
+    return decodeHtmlEntities(
+        imageExpression.match(html).captured(2)).trimmed();
+}
+
+QString htmlImageAlt(const QString &html)
+{
+    static const QRegularExpression altExpression(
+        QStringLiteral("<img\\b[^>]*\\balt\\s*=\\s*(['\\\"])(.*?)\\1"),
+        QRegularExpression::CaseInsensitiveOption
+            | QRegularExpression::DotMatchesEverythingOption);
+    return sanitizedDisplayLine(decodeHtmlEntities(
+        altExpression.match(html).captured(2)));
+}
+
+QString htmlPlainText(QString html)
+{
+    static const QRegularExpression unsafeBlocks(
+        QStringLiteral("<(script|style)\\b[^>]*>.*?</\\1\\s*>"),
+        QRegularExpression::CaseInsensitiveOption
+            | QRegularExpression::DotMatchesEverythingOption);
+    static const QRegularExpression lineBreaks(
+        QStringLiteral("<(?:br\\s*/?|/p|/div|/li|/h[1-6])\\s*>"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression tags(QStringLiteral("<[^>]+>"));
+    html.remove(unsafeBlocks);
+    html.replace(lineBreaks, QStringLiteral("\n"));
+    html.remove(tags);
+    return decodeHtmlEntities(html).trimmed();
 }
 
 QJsonObject basePayload(const QString &id, qsizetype byteSize)
@@ -441,6 +608,8 @@ QJsonObject basePayload(const QString &id, qsizetype byteSize)
         {QStringLiteral("fileCount"), 0},
         {QStringLiteral("files"), QJsonArray{}},
         {QStringLiteral("fileOperation"), QJsonValue(QJsonValue::Null)},
+        {QStringLiteral("multiline"), false},
+        {QStringLiteral("lineCount"), 0},
         {QStringLiteral("restorable"), true},
     };
 }
@@ -506,6 +675,119 @@ PayloadInspection inspectPayload(const QString &id,
         });
 
     if (validText) {
+        if (looksLikeHtml(text)) {
+            const QString source = htmlImageSource(text);
+            const QString alt = htmlImageAlt(text);
+            if (source.startsWith(QStringLiteral("data:image/"),
+                                  Qt::CaseInsensitive)) {
+                static const QRegularExpression dataImageExpression(
+                    QStringLiteral("^data:(image/(?:png|jpeg|gif|webp));base64,(.+)$"),
+                    QRegularExpression::CaseInsensitiveOption
+                        | QRegularExpression::DotMatchesEverythingOption);
+                const QRegularExpressionMatch match =
+                    dataImageExpression.match(source);
+                if (match.hasMatch()) {
+                    const QByteArray encoded = match.captured(2).toLatin1();
+                    const auto decoded = QByteArray::fromBase64Encoding(
+                        encoded, QByteArray::AbortOnBase64DecodingErrors);
+                    if (decoded
+                        && decoded.decoded.size() <= MaximumPayloadBytes) {
+                        PayloadInspection embedded = inspectPayload(
+                            id, decoded.decoded, createPreview);
+                        if (embedded.ok
+                            && embedded.json.value(QStringLiteral("payloadKind"))
+                                   .toString() == QStringLiteral("image")) {
+                            embedded.restoreBytes = decoded.decoded;
+                            embedded.json.insert(
+                                QStringLiteral("htmlImageFallback"), true);
+                            return embedded;
+                        }
+                    }
+                }
+            } else {
+                const QUrl sourceUrl(source, QUrl::StrictMode);
+                if (sourceUrl.isValid() && sourceUrl.isLocalFile()) {
+                    const QFileInfo fileInfo(sourceUrl.toLocalFile());
+                    if (fileInfo.exists() && fileInfo.isFile()
+                        && fileInfo.isReadable() && !fileInfo.isSymLink()
+                        && fileInfo.size() <= MaximumPayloadBytes) {
+                        QFile imageFile(fileInfo.absoluteFilePath());
+                        if (imageFile.open(QIODevice::ReadOnly)) {
+                            const QByteArray imageBytes = imageFile.readAll();
+                            PayloadInspection localImage = inspectPayload(
+                                id, imageBytes, createPreview);
+                            if (localImage.ok
+                                && localImage.json
+                                       .value(QStringLiteral("payloadKind"))
+                                       .toString() == QStringLiteral("image")) {
+                                localImage.restoreBytes = imageBytes;
+                                localImage.json.insert(
+                                    QStringLiteral("htmlImageFallback"), true);
+                                return localImage;
+                            }
+                        }
+                    }
+                }
+            }
+
+            const QString readableText = htmlPlainText(text);
+            const TextDisplay display = textDisplay(readableText);
+            const QUrl sourceUrl(source, QUrl::StrictMode);
+            const bool remoteImage = sourceUrl.isValid()
+                && (sourceUrl.scheme() == QStringLiteral("http")
+                    || sourceUrl.scheme() == QStringLiteral("https")
+                    || sourceUrl.scheme() == QStringLiteral("blob"));
+            const bool imageWrapper = !source.isEmpty();
+            result.mimeType = QStringLiteral("text/html");
+            result.json.insert(QStringLiteral("payloadKind"),
+                               QStringLiteral("text"));
+            result.json.insert(QStringLiteral("textSubtype"),
+                               QStringLiteral("plain"));
+            result.json.insert(QStringLiteral("mimeType"), result.mimeType);
+            result.json.insert(QStringLiteral("htmlFallback"), true);
+            result.json.insert(QStringLiteral("icon"),
+                               imageWrapper ? QStringLiteral("image")
+                                            : QStringLiteral("article"));
+            if (!readableText.isEmpty()) {
+                result.json.insert(QStringLiteral("title"),
+                                   display.title.left(240));
+                result.json.insert(QStringLiteral("subtitle"),
+                                   display.subtitle.left(300));
+                result.json.insert(QStringLiteral("multiline"),
+                                   display.multiline);
+                result.json.insert(QStringLiteral("lineCount"),
+                                   display.lineCount);
+                result.json.insert(QStringLiteral("preview"),
+                                   readableText.left(4096));
+                result.json.insert(QStringLiteral("searchText"),
+                                   readableText.left(
+                                       MaximumSearchTextCharacters));
+            } else if (imageWrapper) {
+                const QString host = sourceUrl.host();
+                result.json.insert(QStringLiteral("title"),
+                                   alt.isEmpty() ? QStringLiteral("图片引用")
+                                                 : alt.left(240));
+                result.json.insert(
+                    QStringLiteral("subtitle"),
+                    remoteImage && !host.isEmpty()
+                        ? QStringLiteral("远程图片 · %1（未下载）").arg(host)
+                        : QStringLiteral("图片内容未提供可持久化像素"));
+                result.json.insert(QStringLiteral("preview"), alt.left(4096));
+                result.json.insert(QStringLiteral("searchText"),
+                                   (alt + QLatin1Char(' ') + host)
+                                       .left(MaximumSearchTextCharacters));
+            } else {
+                result.json.insert(QStringLiteral("title"),
+                                   QStringLiteral("HTML 内容"));
+                result.json.insert(QStringLiteral("subtitle"),
+                                   QStringLiteral("没有可安全显示的正文"));
+                result.json.insert(QStringLiteral("preview"), QString());
+                result.json.insert(QStringLiteral("searchText"), QString());
+            }
+            result.json.insert(QStringLiteral("searchTextTruncated"), false);
+            return result;
+        }
+
         QStringList rawLines = text.split(QLatin1Char('\n'));
         while (!rawLines.isEmpty() && rawLines.last().trimmed().isEmpty())
             rawLines.removeLast();
@@ -594,8 +876,9 @@ PayloadInspection inspectPayload(const QString &id,
         const QUrl url(trimmed, QUrl::StrictMode);
         QString subtype = QStringLiteral("plain");
         QString icon = QStringLiteral("content_paste");
-        QString title = trimmed;
-        QString subtitle = QStringLiteral("文本");
+        const TextDisplay display = textDisplay(text);
+        QString title = display.title;
+        QString subtitle = display.subtitle;
         if (!trimmed.contains(QRegularExpression(QStringLiteral("\\s")))
             && url.isValid() && !url.scheme().isEmpty()
             && (url.scheme() == QStringLiteral("http")
@@ -604,11 +887,6 @@ PayloadInspection inspectPayload(const QString &id,
             icon = QStringLiteral("link");
             title = url.host().isEmpty() ? trimmed : url.host();
             subtitle = trimmed;
-        } else if (likelyCode(text)) {
-            subtype = QStringLiteral("code");
-            icon = QStringLiteral("code");
-            subtitle = QStringLiteral("代码 · %1 行")
-                .arg(text.count(QLatin1Char('\n')) + 1);
         }
         result.mimeType = QStringLiteral("text/plain;charset=utf-8");
         result.json.insert(QStringLiteral("payloadKind"), QStringLiteral("text"));
@@ -618,6 +896,8 @@ PayloadInspection inspectPayload(const QString &id,
         result.json.insert(QStringLiteral("title"),
                            title.isEmpty() ? QStringLiteral("空文本") : title.left(240));
         result.json.insert(QStringLiteral("subtitle"), subtitle.left(300));
+        result.json.insert(QStringLiteral("multiline"), display.multiline);
+        result.json.insert(QStringLiteral("lineCount"), display.lineCount);
         result.json.insert(QStringLiteral("preview"), text.left(4096));
         result.json.insert(QStringLiteral("searchText"),
                            text.left(MaximumSearchTextCharacters));
@@ -651,14 +931,25 @@ QJsonObject lightweightEntry(const QByteArray &line)
         return {};
     const QString preview = QString::fromUtf8(line.sliced(separator + 1));
     QJsonObject entry = basePayload(normalizedId, 0);
-    entry.insert(QStringLiteral("preview"), preview);
-    entry.insert(QStringLiteral("title"), preview.isEmpty()
-                     ? QStringLiteral("空文本") : preview);
-    entry.insert(QStringLiteral("subtitle"), QStringLiteral("文本"));
+    const bool html = looksLikeHtml(preview);
+    const bool htmlImage = html && !htmlImageSource(preview).isEmpty();
+    const TextDisplay display = textDisplay(preview);
+    entry.insert(QStringLiteral("preview"), html ? QString() : preview);
+    entry.insert(QStringLiteral("title"),
+                 htmlImage ? QStringLiteral("图片引用")
+                           : html ? QStringLiteral("HTML 内容")
+                                  : display.title);
+    entry.insert(QStringLiteral("subtitle"),
+                 html ? QStringLiteral("正在检查内容") : display.subtitle);
     entry.insert(QStringLiteral("payloadKind"), QStringLiteral("text"));
     entry.insert(QStringLiteral("textSubtype"), QStringLiteral("plain"));
     entry.insert(QStringLiteral("mimeType"), QStringLiteral("text/plain;charset=utf-8"));
-    entry.insert(QStringLiteral("icon"), QStringLiteral("content_paste"));
+    entry.insert(QStringLiteral("icon"),
+                 htmlImage ? QStringLiteral("image")
+                           : html ? QStringLiteral("article")
+                                  : QStringLiteral("content_paste"));
+    entry.insert(QStringLiteral("multiline"), display.multiline);
+    entry.insert(QStringLiteral("lineCount"), display.lineCount);
 
     static const QRegularExpression imageExpression(
         QStringLiteral("^\\[\\[ binary data ([0-9.]+ [A-Za-z]+) ([^ ]+) ([0-9]+)x([0-9]+) \\]\\]$"));
@@ -732,15 +1023,119 @@ CommandResult ClipboardCommand::run(const QStringList &arguments) const
     const QString subcommand = arguments.first();
     const QString cliphist = QStandardPaths::findExecutable(QStringLiteral("cliphist"));
     const QString wlCopy = QStandardPaths::findExecutable(QStringLiteral("wl-copy"));
+    const QString wlPaste = QStandardPaths::findExecutable(QStringLiteral("wl-paste"));
     const bool cliphistAvailable = !cliphist.isEmpty();
     const bool wlCopyAvailable = !wlCopy.isEmpty();
     const bool watcherRunning = cliphistAvailable && clipboardWatcherRunning();
-    const QJsonObject dependencies = dependencyObject(cliphist, wlCopy);
+    const QJsonObject dependencies = dependencyObject(cliphist, wlCopy, wlPaste);
     const QJsonObject capabilities{
         {QStringLiteral("inspect"), true},
         {QStringLiteral("preview"), true},
         {QStringLiteral("mimeRestore"), true},
+        {QStringLiteral("mimeAwareStore"), true},
     };
+
+    if (subcommand == QStringLiteral("store")) {
+        QString invalid;
+        if (!consumeJsonOptions(arguments, 1, &invalid))
+            return usageFailure(
+                QStringLiteral("Unknown clipboard store option: %1").arg(invalid),
+                jsonRequested);
+
+        // wl-paste --watch supplies the event payload on stdin. Drain it so a
+        // large selection cannot block the watcher pipe while this command
+        // requests one explicitly selected MIME from the compositor.
+        drainStandardInput();
+        if (qEnvironmentVariable("CLIPBOARD_STATE").compare(
+                QStringLiteral("sensitive"), Qt::CaseInsensitive) == 0) {
+            return resultFor(
+                QStringLiteral("clipboard.store"), jsonRequested, Success,
+                {{QStringLiteral("available"), true},
+                 {QStringLiteral("stored"), false},
+                 {QStringLiteral("skippedSensitive"), true},
+                 {QStringLiteral("dependencies"), dependencies}},
+                QStringLiteral("Sensitive clipboard entry skipped"), false);
+        }
+        if (!cliphistAvailable || wlPaste.isEmpty()) {
+            const QString code = !cliphistAvailable
+                ? QStringLiteral("cliphist_unavailable")
+                : QStringLiteral("wl_paste_unavailable");
+            const QString message = !cliphistAvailable
+                ? QStringLiteral("cliphist is unavailable")
+                : QStringLiteral("wl-paste is unavailable");
+            return resultFor(
+                QStringLiteral("clipboard.store"), jsonRequested,
+                DependencyFailure,
+                {{QStringLiteral("available"), false},
+                 {QStringLiteral("stored"), false},
+                 {QStringLiteral("dependencies"), dependencies},
+                 {QStringLiteral("error"), errorObject(code, message)}},
+                message, true);
+        }
+
+        const ProcessResult listTypes = runProcess(
+            wlPaste, {QStringLiteral("--list-types")});
+        const QString selectedMime = listTypes.started && listTypes.finished
+            && listTypes.exitCode == 0
+            ? preferredSelectionMime(listTypes.standardOutput) : QString();
+        if (selectedMime.isEmpty()) {
+            const QString message =
+                QStringLiteral("Clipboard selection has no supported image or text MIME");
+            return resultFor(
+                QStringLiteral("clipboard.store"), jsonRequested,
+                RuntimeFailure,
+                {{QStringLiteral("available"), true},
+                 {QStringLiteral("stored"), false},
+                 {QStringLiteral("dependencies"), dependencies},
+                 {QStringLiteral("error"), errorObject(
+                      QStringLiteral("clipboard_mime_unsupported"), message)}},
+                message, true);
+        }
+
+        const ProcessResult selection = runProcess(
+            wlPaste, {QStringLiteral("--type"), selectedMime});
+        if (!selection.started || !selection.finished
+            || selection.exitCode != 0
+            || selection.standardOutput.size() > MaximumPayloadBytes) {
+            const bool tooLarge =
+                selection.standardOutput.size() > MaximumPayloadBytes;
+            const QString message = tooLarge
+                ? QStringLiteral("Clipboard payload exceeds the safe limit")
+                : QStringLiteral("Unable to read the selected clipboard MIME");
+            return resultFor(
+                QStringLiteral("clipboard.store"), jsonRequested,
+                RuntimeFailure,
+                {{QStringLiteral("available"), true},
+                 {QStringLiteral("stored"), false},
+                 {QStringLiteral("selectedMime"), selectedMime},
+                 {QStringLiteral("dependencies"), dependencies},
+                 {QStringLiteral("error"), errorObject(
+                      tooLarge ? QStringLiteral("clipboard_payload_too_large")
+                               : QStringLiteral("clipboard_read_failed"),
+                      message)}},
+                message, true);
+        }
+        const ProcessResult store = runProcess(
+            cliphist, {QStringLiteral("store")}, selection.standardOutput);
+        const bool stored = store.started && store.finished
+            && store.exitCode == 0;
+        const QString message = stored
+            ? QStringLiteral("Clipboard entry stored")
+            : QStringLiteral("Unable to store clipboard entry");
+        return resultFor(
+            QStringLiteral("clipboard.store"), jsonRequested,
+            stored ? Success : RuntimeFailure,
+            {{QStringLiteral("available"), true},
+             {QStringLiteral("stored"), stored},
+             {QStringLiteral("selectedMime"), selectedMime},
+             {QStringLiteral("dependencies"), dependencies},
+             {QStringLiteral("exitCode"), store.exitCode},
+             {QStringLiteral("error"),
+              stored ? QJsonValue(QJsonValue::Null)
+                     : QJsonValue(errorObject(
+                           QStringLiteral("cliphist_store_failed"), message))}},
+            message, !stored);
+    }
 
     if (subcommand == QStringLiteral("status")) {
         QString invalid;
@@ -1047,8 +1442,10 @@ CommandResult ClipboardCommand::run(const QStringList &arguments) const
         QStringList copyArguments;
         if (!inspection.mimeType.isEmpty())
             copyArguments << QStringLiteral("--type") << inspection.mimeType;
+        const QByteArray &restoreBytes = inspection.restoreBytes.isNull()
+            ? decode.standardOutput : inspection.restoreBytes;
         const ProcessResult copy =
-            runProcess(wlCopy, copyArguments, decode.standardOutput);
+            runProcess(wlCopy, copyArguments, restoreBytes);
         const bool ok = copy.started && copy.finished && copy.exitCode == 0;
         const QString message = ok ? QStringLiteral("Clipboard entry restored")
                                    : QStringLiteral("Unable to write clipboard entry");

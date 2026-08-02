@@ -133,6 +133,23 @@ Item {
         return delegate ? delegate.activationArea : null;
     }
 
+    function clipboardLayoutAt(index) {
+        const delegate = clipboardList.itemAtIndex(index);
+        if (!delegate)
+            return null;
+        return {
+            textRight: delegate.textArea.x + delegate.textArea.width,
+            actionLeft: delegate.actionArea.x,
+            titleMaximumLineCount: delegate.titleLabel.maximumLineCount,
+            subtitleMaximumLineCount: delegate.subtitleLabel.maximumLineCount,
+            titleWrapMode: delegate.titleLabel.wrapMode,
+            subtitleWrapMode: delegate.subtitleLabel.wrapMode,
+            titleFontFamily: delegate.titleLabel.font.family,
+            titleClip: delegate.titleLabel.clip,
+            subtitleClip: delegate.subtitleLabel.clip
+        };
+    }
+
     function gridColumns() {
         return root.wallpaperColumnCount;
     }
@@ -550,6 +567,10 @@ Item {
                         String(modelData.id)
                             === root.clipboardActionEntryId
                     readonly property alias activationArea: clipboardMouse
+                    readonly property alias textArea: clipboardTextColumn
+                    readonly property alias actionArea: clipboardActionArea
+                    readonly property alias titleLabel: clipboardTitle
+                    readonly property alias subtitleLabel: clipboardSubtitle
                     width: ListView.view.width
                     height: root.style.resultRowHeight
 
@@ -579,7 +600,11 @@ Item {
 
                         Item {
                             Layout.preferredWidth: 42
+                            Layout.minimumWidth: 42
+                            Layout.maximumWidth: 42
                             Layout.preferredHeight: 42
+                            Layout.minimumHeight: 42
+                            Layout.maximumHeight: 42
 
                             Item {
                                 id: clipboardPreviewFrame
@@ -629,29 +654,38 @@ Item {
                         }
 
                         ColumnLayout {
+                            id: clipboardTextColumn
+
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            clip: true
                             spacing: 1
 
                             Text {
+                                id: clipboardTitle
+
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: clipboardDelegate.modelData.title
                                 color:
                                     clipboardDelegate.index
                                         === root.selectedIndex
                                     ? root.style.selectedContentColor
                                     : Appearance.colors.colOnSurface
-                                font.family:
-                                    clipboardDelegate.modelData.textSubtype
-                                        === "code"
-                                    ? Sizes.fontFamilyMono
-                                    : Sizes.fontFamily
+                                font.family: Sizes.fontFamily
                                 textFormat: Text.PlainText
                                 font.pixelSize: 16
+                                maximumLineCount: 1
+                                wrapMode: Text.NoWrap
                                 elide: Text.ElideRight
+                                clip: true
                             }
 
                             Text {
+                                id: clipboardSubtitle
+
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: clipboardDelegate.actionForThis
                                     && root.clipboardActionState === "error"
                                     && root.clipboardActionError !== ""
@@ -665,13 +699,22 @@ Item {
                                 font.family: Sizes.fontFamily
                                 textFormat: Text.PlainText
                                 font.pixelSize: 12
+                                maximumLineCount: 1
+                                wrapMode: Text.NoWrap
                                 elide: Text.ElideRight
+                                clip: true
                             }
                         }
 
                         Item {
+                            id: clipboardActionArea
+
                             Layout.preferredWidth: 92
+                            Layout.minimumWidth: 92
+                            Layout.maximumWidth: 92
                             Layout.preferredHeight: 42
+                            Layout.minimumHeight: 42
+                            Layout.maximumHeight: 42
 
                             ToolButton {
                                 anchors.right: parent.right

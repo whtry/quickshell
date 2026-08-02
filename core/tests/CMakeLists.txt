@@ -88,7 +88,7 @@ foreach(tool_target IN ITEMS fake_gsr fake_ffmpeg fake_ffprobe fake_pactl)
     )
 endforeach()
 
-foreach(tool_target IN ITEMS fake_cliphist fake_wl_copy)
+foreach(tool_target IN ITEMS fake_cliphist fake_wl_copy fake_wl_paste)
     qt_add_executable(${tool_target}
         fake_clipboard_tool.cpp
     )
@@ -104,6 +104,7 @@ set_target_properties(fake_ffprobe PROPERTIES OUTPUT_NAME ffprobe)
 set_target_properties(fake_pactl PROPERTIES OUTPUT_NAME pactl)
 set_target_properties(fake_cliphist PROPERTIES OUTPUT_NAME cliphist)
 set_target_properties(fake_wl_copy PROPERTIES OUTPUT_NAME wl-copy)
+set_target_properties(fake_wl_paste PROPERTIES OUTPUT_NAME wl-paste)
 
 qt_add_executable(key_integration_tests
     key_integration_test.cpp
@@ -127,6 +128,7 @@ add_dependencies(key_integration_tests
     fake_pactl
     fake_cliphist
     fake_wl_copy
+    fake_wl_paste
 )
 
 add_test(NAME key_integration_tests COMMAND key_integration_tests)

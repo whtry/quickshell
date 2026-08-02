@@ -50,11 +50,14 @@ Item {
                 provider: "clipboard",
                 id: String(entry.id || ""),
                 payloadKind: String(entry.payloadKind || "binary"),
-                textSubtype: entry.textSubtype === null
-                    || entry.textSubtype === undefined
-                    ? "" : String(entry.textSubtype),
+                // Old schema-v2 CLI builds may still emit "code". Text
+                // content now uses one consistent plain-text presentation.
+                textSubtype: String(entry.textSubtype || "") === "code"
+                    ? "plain" : String(entry.textSubtype || ""),
                 title: title,
                 subtitle: subtitle,
+                multiline: entry.multiline === true,
+                lineCount: Number(entry.lineCount || 0),
                 icon: String(entry.icon || "data_object"),
                 preview: rawPreview,
                 previewUrl: String(entry.previewUrl || ""),

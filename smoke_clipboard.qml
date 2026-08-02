@@ -60,6 +60,21 @@ ShellRoot {
                 smoke.verify(spotlight.clipboardCanRestore,
                              "fake clipboard can restore");
                 spotlight.selectResult(0);
+                const layout = spotlight.clipboardLayoutAt(0);
+                smoke.verify(layout !== null,
+                             "clipboard delegate layout is available");
+                if (layout !== null) {
+                    smoke.verify(layout.textRight <= layout.actionLeft,
+                                 "text does not enter the fixed action area");
+                    smoke.verify(layout.titleMaximumLineCount === 1
+                                     && layout.subtitleMaximumLineCount === 1,
+                                 "clipboard labels are limited to one visual line each");
+                    smoke.verify(layout.titleWrapMode === Text.NoWrap
+                                     && layout.subtitleWrapMode === Text.NoWrap,
+                                 "clipboard labels never render embedded newlines");
+                    smoke.verify(layout.titleClip && layout.subtitleClip,
+                                 "clipboard label painting is clipped to its column");
+                }
                 smoke.key(Qt.Key_Return);
                 smoke.verify(spotlight.clipboardActionState === "copying",
                              "Enter starts copying");

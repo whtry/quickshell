@@ -247,48 +247,47 @@ qs ipc call keystone currentStyle
 ### 剪贴板历史
 
 剪贴板功能依赖 `cliphist` 和 `wl-clipboard`。Clavis 不会在每次打开
-Spotlight 时启动 watcher，必须由用户会话持久启动一次。若发行版已经提供
-`cliphist.service`，直接启用它：
+Spotlight 时创建 watcher。仓库提供一个 MIME-aware user service：它在浏览器
+同时提供图片、纯文本和 HTML 时优先保存真实图片，其次保存纯文本，最后才
+保存 HTML，并保证一次 selection 只调用一次 `cliphist store`。
+
+先安装最新 `key` 和服务，再启用开机自启动：
 
 ```bash
-systemctl --user enable --now cliphist.service
-```
+sudo cmake --install core/build
+mkdir -p ~/.config/systemd/user
+cp systemd/user/clavis-cliphist.service ~/.config/systemd/user/
 
-若发行版没有提供该单元，可以创建模板用户服务
-`~/.config/systemd/user/cliphist-watcher@.service`：
-
-```ini
-[Unit]
-Description=Store %i clipboard history with cliphist
-PartOf=graphical-session.target
-After=graphical-session.target
-
-[Service]
-ExecStart=/usr/bin/wl-paste --type %i --watch /usr/bin/cliphist store
-Restart=on-failure
-
-[Install]
-WantedBy=graphical-session.target
-```
-
-同时记录文本和图片：
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now \
+systemctl --user disable --now cliphist.service
+systemctl --user disable --now \
   cliphist-watcher@text.service \
   cliphist-watcher@image.service
+
+systemctl --user daemon-reload
+systemctl --user enable --now clavis-cliphist.service
 ```
 
-若发行版中的可执行文件不位于 `/usr/bin`，请相应修改 `ExecStart`。CLI
+不要同时运行 generic、text/image 和 MIME-aware watcher，否则同一次复制
+可能被重复保存。CLI
 会在历史为空时检测 watcher；未运行会返回
 `cliphist_watcher_inactive`，而不再把它误报为普通的“没有匹配结果”。
+可用以下命令核对当前 selection 与 watcher：
+
+```bash
+wl-paste --list-types
+systemctl --user is-enabled clavis-cliphist.service
+systemctl --user is-active clavis-cliphist.service
+systemctl --user status clavis-cliphist.service
+journalctl --user -u clavis-cliphist.service --since "5 minutes ago"
+```
+
 Clipse 和 cliphist 使用不同的历史数据库，Clipse 中存在记录不代表
 Spotlight 能读到它；两个 watcher 可以同时监听 Wayland 剪贴板，不构成
 数据库冲突。安全包装层支持：
 
 ```bash
 key clipboard status --format json
+key clipboard store --format json
 key clipboard list --format json --limit 100
 key clipboard inspect 123 --format json
 key clipboard preview 123 --format json
@@ -297,15 +296,19 @@ key clipboard delete 123 --format json
 key clipboard clear --format json
 ```
 
-`list` 只读取轻量索引；可见或被搜索的条目通过 `inspect` 按需解码。
+`store` 由 watcher 调用，负责选择本次 selection 的首选 MIME；不要把它当作
+常驻命令手工运行。`list` 只读取轻量索引；可见或被搜索的条目通过 `inspect`
+按需解码。
 `preview` 与 `inspect` 返回相同的结构化分类，并为原始图片生成受限尺寸的
 私有缓存缩略图，不会把图片 Base64 放进 JSON。`restore` 保持
 `cliphist decode` 的原始字节，并根据检查结果使用 `wl-copy --type`
 恢复文本、图片、URI 列表或 GNOME 文件复制 MIME。entry id 仅接受正十进制
-整数，剪贴板正文不会写入日志。
+整数，剪贴板正文不会写入日志。旧历史中的 HTML 图片包装会安全降级：内嵌
+`data:image` 和受限的本地图片可复用图片预览；远程或 `blob:` 图片不会联网
+下载，也不会把原始标签直接显示出来。
 
 可用以下命令确认 Quickshell 与终端实际使用的 CLI。开发构建可通过
-`CLAVIS_KEY` 显式指定；schemaVersion 小于 2 或缺少 inspect/MIME
+`CLAVIS_KEY` 显式指定；缺少 inspect、MIME restore 或 MIME-aware store
 capability 时，Spotlight 会显示 `stale_key_cli`，不会静默调用旧实现：
 
 ```bash
@@ -314,8 +317,8 @@ type -a key
 CLAVIS_KEY="$PWD/core/build/bin/key" qs
 ```
 
-若系统中的 `key clipboard` 仍提示未知命令或 schema 过旧，需要安装本仓库
-构建出的新版 CLI：
+若系统中的 `key clipboard` 仍提示未知命令或缺少必要 capability，需要安装
+本仓库构建出的新版 CLI：
 
 ```bash
 sudo cmake --install core/build

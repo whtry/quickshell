@@ -25,6 +25,7 @@ Item {
     property string clipboardActionEntryId: ""
     property string clipboardActionError: ""
     property bool clipboardActionRunning: false
+    property bool animating: false
     property real availableHeight: 100000
     property real contentOpacity: 1
     readonly property int modeIndex: mode === "wallpapers"
@@ -85,6 +86,7 @@ Item {
     }
 
     Behavior on height {
+        enabled: !root.animating
         NumberAnimation {
             duration: root.style.panelDuration
             easing.type: Easing.BezierSpline

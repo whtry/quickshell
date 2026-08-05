@@ -41,6 +41,7 @@ PanelWindow {
     property string clipboardActionEntryId: ""
     property bool clipboardActionKeepOpen: false
     property string clipboardActionError: ""
+    property bool openPending: false
 
     property real windowProgress: 0
     property real railProgress: 0
@@ -48,6 +49,10 @@ PanelWindow {
     property real _windowAnimationTarget: 0
     property real _railAnimationTarget: 0
     property real _webAnimationTarget: 0
+
+    readonly property bool spotlightAnimating:
+        root.windowPhase === "opening"
+        || root.windowPhase === "closing"
 
     readonly property var activeResults: mode === "apps"
         ? appProvider.results
@@ -189,6 +194,23 @@ PanelWindow {
             return true;
         }
 
+        // The clipboard list loads asynchronously. Wait for it so the panel
+        // is laid out at full size before the opening animation starts; the
+        // window then animates a cached layer instead of growing and
+        // re-rendering the whole panel on every frame.
+        if (localMode === "clipboard" && clipboardProvider.loading) {
+            root.openPending = true;
+            openPendingTimer.restart();
+            return true;
+        }
+
+        root._startOpenAnimation();
+        return true;
+    }
+
+    function _startOpenAnimation() {
+        root.openPending = false;
+        openPendingTimer.stop();
         if (!root.visible)
             root.visible = true;
         root.windowPhase = "opening";
@@ -198,9 +220,16 @@ PanelWindow {
     }
 
     function requestClose() {
-        if (root.windowPhase === "hidden"
-                || root.windowPhase === "closing")
+        if (root.windowPhase === "closing")
             return false;
+        if (root.windowPhase === "hidden") {
+            if (!root.openPending)
+                return false;
+            root.openPending = false;
+            openPendingTimer.stop();
+            root.visible = false;
+            return true;
+        }
         root.windowPhase = "closing";
         root.modeRailExpanded = false;
         root.modeFocusIndex = -1;
@@ -624,6 +653,23 @@ PanelWindow {
         easing.bezierCurve: style.webCurve
     }
 
+    Timer {
+        id: openPendingTimer
+
+        interval: 800
+        repeat: false
+        onTriggered: root._startOpenAnimation()
+    }
+
+    Connections {
+        target: clipboardProvider
+
+        function onLoadingChanged() {
+            if (root.openPending && !clipboardProvider.loading)
+                root._startOpenAnimation();
+        }
+    }
+
     CompositorBlurRegion {
         id: spotlightBlur
 
@@ -670,6 +716,8 @@ PanelWindow {
         scale: style.initialScale
             + (1 - style.initialScale) * root.windowProgress
         transformOrigin: Item.Top
+        layer.enabled: root.spotlightAnimating
+        layer.smooth: true
 
         MouseArea {
             anchors.fill: parent
@@ -720,6 +768,7 @@ PanelWindow {
             mode: root.mode
             results: root.activeResults
             selectedIndex: root.selectedResultIndex
+            animating: root.spotlightAnimating
             loading: root.clipboardMode && clipboardProvider.loading
             providerAvailable:
                 !root.clipboardMode || clipboardProvider.available

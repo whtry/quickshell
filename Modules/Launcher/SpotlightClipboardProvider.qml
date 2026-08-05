@@ -6,6 +6,8 @@ Item {
 
     property string query: ""
     property var results: []
+    property bool inspectionsEnabled: false
+    property var _pendingInspectionIds: []
     readonly property bool loading: ClipboardService.loading
     readonly property bool available: ClipboardService.canList
         && (ClipboardService.watcherRunning
@@ -78,15 +80,52 @@ Item {
     }
 
     function refresh() {
+        // Detail inspection spawns one backend process per entry and every
+        // completion rebuilds the whole result list. Defer it until the
+        // panel opening animation has settled so the first frames stay
+        // smooth; the list response already carries title/subtitle/icon.
+        root.inspectionsEnabled = false;
+        root._pendingInspectionIds = [];
+        inspectionArmTimer.restart();
         ClipboardService.refresh(100);
     }
 
     function requestDetails(id) {
+        if (!root.inspectionsEnabled) {
+            if (root._pendingInspectionIds.indexOf(String(id || "")) < 0)
+                root._pendingInspectionIds.push(String(id || ""));
+            return true;
+        }
         return ClipboardService.inspect(id);
     }
 
     function releaseDetails(id) {
+        if (!root.inspectionsEnabled) {
+            const index = root._pendingInspectionIds.indexOf(String(id || ""));
+            if (index >= 0) {
+                const next = root._pendingInspectionIds.slice();
+                next.splice(index, 1);
+                root._pendingInspectionIds = next;
+            }
+            return true;
+        }
         return ClipboardService.cancelInspect(id);
+    }
+
+    function flushPendingInspections() {
+        root.inspectionsEnabled = true;
+        const pending = root._pendingInspectionIds;
+        root._pendingInspectionIds = [];
+        for (let index = 0; index < pending.length; ++index)
+            ClipboardService.inspect(pending[index]);
+    }
+
+    Timer {
+        id: inspectionArmTimer
+
+        interval: 500
+        repeat: false
+        onTriggered: root.flushPendingInspections()
     }
 
     function inspectSearchCandidates() {

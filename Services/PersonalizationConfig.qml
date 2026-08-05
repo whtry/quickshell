@@ -1106,6 +1106,7 @@ Singleton {
         const extensionDefaults = {
             "appLauncher": false,
             "codexUsage": false,
+            "codexClipboardShortcut": true,
             "powerProfiles": false,
             "batteryRing": false,
             "powerProfileRefreshRate": false

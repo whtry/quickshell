@@ -91,6 +91,20 @@ Item {
             spotlightLauncher.openSpotlight(mode);
             return String(mode).toUpperCase();
         }
+
+        function toggleMode(mode: string): string {
+            if (spotlightLauncher.normalizedMode(mode || "") === "")
+                return "INVALID_MODE";
+            if (spotlightLauncher.showing) {
+                if (spotlightLauncher.mode === mode)
+                    spotlightLauncher.requestClose();
+                else
+                    spotlightLauncher.openSpotlight(mode);
+            } else {
+                spotlightLauncher.openSpotlight(mode);
+            }
+            return spotlightLauncher.windowPhase.toUpperCase();
+        }
     }
 
     IpcHandler {

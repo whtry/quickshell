@@ -79,8 +79,8 @@ QtObject {
     readonly property int webDuration: 340
     readonly property int panelDuration: 210
     readonly property real scrimOpacity: 0.32
-    readonly property real initialScale: 0.7
-    readonly property real initialYOffset: 0
+    readonly property real initialScale: 0.5
+    readonly property real initialYOffset: 64
     readonly property real railWidthContraction:
         modeRailReservedWidth
     readonly property real edgeSoftness: 0.9

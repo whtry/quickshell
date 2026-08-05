@@ -25,6 +25,16 @@ Item {
         PersonalizationConfig.waveBatteryAnimationEnabled
         && (!PersonalizationConfig.waveBatteryAnimationFollowPowerProfile
             || PowerProfileService.profile !== "power-saver")
+    readonly property bool powerSaverActive:
+        PowerProfileService.profile === "power-saver"
+    readonly property bool isCharging:
+        batteryAvailable && battery.acOnline === true
+    readonly property color batteryGreen: "#4caf50"
+    readonly property color batteryOrange: "#ff9800"
+    readonly property color batteryRed: "#f44336"
+    readonly property color batteryEffectColor: powerSaverActive
+        ? batteryOrange
+        : (isCharging ? batteryGreen : batteryRed)
 
     implicitHeight: buttonSize
     implicitWidth: buttonSize
@@ -64,10 +74,14 @@ Item {
 
             property real displayedLevel: root.batteryLevel
             property real phase: 0
-            property color fillColor: Appearance.colors.colError
+            property color fillColor: root.batteryEffectColor
 
             Behavior on displayedLevel {
                 NumberAnimation { duration: 420; easing.type: Easing.OutCubic }
+            }
+
+            Behavior on fillColor {
+                ColorAnimation { duration: 260; easing.type: Easing.OutCubic }
             }
 
             NumberAnimation on phase {
@@ -143,10 +157,14 @@ Item {
             // Use a solid outline track so the complete enclosure stays
             // visible against both light and dark quick-settings surfaces.
             property color trackColor: Appearance.colors.colOutlineVariant
-            property color progressColor: Appearance.colors.colPrimary
+            property color progressColor: root.batteryEffectColor
 
             Behavior on displayedLevel {
                 NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+            }
+
+            Behavior on progressColor {
+                ColorAnimation { duration: 260; easing.type: Easing.OutCubic }
             }
 
             onPaint: {

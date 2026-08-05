@@ -194,11 +194,15 @@ PanelWindow {
             return true;
         }
 
-        // The clipboard list loads asynchronously. Wait for it so the panel
-        // is laid out at full size before the opening animation starts; the
-        // window then animates a cached layer instead of growing and
-        // re-rendering the whole panel on every frame.
-        if (localMode === "clipboard" && clipboardProvider.loading) {
+        // The clipboard list loads asynchronously. Wait until the results are
+        // actually applied (loading alone is not enough: it flips false just
+        // before the rebuild) so the panel is laid out at full size before the
+        // opening animation starts. The window then animates a cached layer
+        // instead of growing and re-rendering the whole panel on every frame.
+        if (localMode === "clipboard"
+                && (clipboardProvider.loading
+                    || (clipboardProvider.results.length === 0
+                        && !clipboardProvider.error))) {
             root.openPending = true;
             openPendingTimer.restart();
             return true;
@@ -677,7 +681,20 @@ PanelWindow {
         target: clipboardProvider
 
         function onLoadingChanged() {
-            if (root.openPending && !clipboardProvider.loading)
+            if (!root.openPending)
+                return;
+            if (!clipboardProvider.loading
+                    && (clipboardProvider.results.length > 0
+                        || clipboardProvider.error))
+                root._startOpenAnimation();
+        }
+
+        function onResultsChanged() {
+            if (!root.openPending)
+                return;
+            if (!clipboardProvider.loading
+                    && (clipboardProvider.results.length > 0
+                        || clipboardProvider.error))
                 root._startOpenAnimation();
         }
     }

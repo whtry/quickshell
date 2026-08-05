@@ -54,6 +54,10 @@ Item {
             Layout.fillWidth: false
             spacing: Sizes.lockColumnGap
 
+            Item {
+                Layout.fillHeight: true
+            }
+
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: Math.round(7 * 4 / 3)
@@ -535,6 +539,10 @@ Item {
                         }
                     }
                 }
+            }
+
+            Item {
+                Layout.fillHeight: true
             }
         }
 

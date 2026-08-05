@@ -244,7 +244,7 @@ Rectangle {
                             }
 
                             Text {
-                                text: delegateRoot.modelData ? delegateRoot.modelData.summary : ""
+                                text: "****"
                                 color: Appearance.colors.colOnSurface
                                 font.family: Sizes.fontFamily
                                 font.pixelSize: 17
@@ -262,6 +262,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 maximumLineCount: 2
                                 opacity: 0.8
+                                visible: false
                             }
                         }
 

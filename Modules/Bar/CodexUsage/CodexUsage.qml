@@ -14,6 +14,7 @@ Item {
     property var secondary: null
     property bool ready: false
     property bool failed: false
+    property string failureMessage: ""
     readonly property var displayWindow: primary || secondary
     readonly property int remainingPercent: displayWindow
         ? Math.max(0, Math.round(100 - Number(displayWindow.usedPercent || 0)))
@@ -41,7 +42,8 @@ Item {
 
     readonly property string tooltipText: {
         if (failed && !ready)
-            return qsTr("Codex 用量暂时不可用")
+            return root.failureMessage
+                || qsTr("Codex 用量暂时不可用")
         const lines = [qsTr("Codex 用量")]
         if (primary)
             lines.push(windowText(qsTr("5 小时："), primary))
@@ -51,6 +53,19 @@ Item {
             lines.push(qsTr("当前账户未返回额度窗口"))
         lines.push(qsTr("点击打开用量页面"))
         return lines.join("\n")
+    }
+
+    function extractFailureMessage(text) {
+        try {
+            const payload = JSON.parse(String(text || "").trim())
+            const item = Array.isArray(payload) ? payload[0] : payload
+            const message = item && item.error
+                ? String(item.error.message || "").trim()
+                : ""
+            return message || ""
+        } catch (parseError) {
+            return ""
+        }
     }
 
     function refresh() {
@@ -194,6 +209,8 @@ Item {
         ]
 
         stdout: StdioCollector {
+            id: usageCollector
+
             onStreamFinished: {
                 try {
                     const payload = JSON.parse(this.text)
@@ -204,8 +221,11 @@ Item {
                     root.secondary = item.usage.secondary || null
                     root.ready = true
                     root.failed = false
+                    root.failureMessage = ""
                 } catch (error) {
                     root.failed = true
+                    root.failureMessage =
+                        root.extractFailureMessage(this.text)
                 }
             }
         }
@@ -213,6 +233,9 @@ Item {
         onExited: exitCode => {
             if (exitCode !== 0)
                 root.failed = true
+            if (root.failed && !root.failureMessage)
+                root.failureMessage =
+                    root.extractFailureMessage(usageCollector.text)
         }
     }
 

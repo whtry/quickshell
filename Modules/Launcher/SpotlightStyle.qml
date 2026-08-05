@@ -87,12 +87,13 @@ QtObject {
     readonly property real shadowBlur: 0.72
     readonly property real shadowVerticalOffset: 7
     readonly property var windowEnterCurve:
-        Appearance.animationCurves.emphasizedDecel
+        PersonalizationConfig.transitionBezierCurve
     readonly property var windowExitCurve:
-        Appearance.animationCurves.emphasizedAccel
-    readonly property var panelCurve: Appearance.animationCurves.emphasized
+        PersonalizationConfig.transitionBezierCurve
+    readonly property var panelCurve:
+        PersonalizationConfig.transitionBezierCurve
     readonly property var effectsCurve:
-        Appearance.animationCurves.standardDecel
+        PersonalizationConfig.transitionBezierCurve
     readonly property var wallpaperHoverCurve:
         Appearance.animationCurves.standard
     // railProgress itself stays reversible and bounded. The morph surface

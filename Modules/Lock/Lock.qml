@@ -72,6 +72,10 @@ Scope {
                 return;
 
             internalContext.unlockInProgress = true;
+            // A typed password goes straight to pam_unix; an empty field
+            // starts the biometric-first stack (Biopass fingerprint).
+            const pam = internalContext.currentText.length > 0
+                ? passwordPam : biometricPam;
             pam.start();
         }
 
@@ -80,8 +84,21 @@ Scope {
             root.unlocked();
         }
 
+        function finishPam(result) {
+            if (result == PamResult.Success) {
+                internalContext.currentText = "";
+                internalContext.showFailure = false;
+                sessionLock.unlock();
+            } else {
+                internalContext.currentText = "";
+                internalContext.showFailure = true;
+                internalContext.unlockFailed();
+            }
+            internalContext.unlockInProgress = false;
+        }
+
         PamContext {
-            id: pam
+            id: biometricPam
 
             configDirectory: Paths.shellDir + "/Modules/Lock/pam"
             config: "password.conf"
@@ -91,18 +108,21 @@ Scope {
                     this.respond(internalContext.currentText);
             }
 
-            onCompleted: result => {
-                if (result == PamResult.Success) {
-                    internalContext.currentText = "";
-                    internalContext.showFailure = false;
-                    sessionLock.unlock();
-                } else {
-                    internalContext.currentText = "";
-                    internalContext.showFailure = true;
-                    internalContext.unlockFailed();
-                }
-                internalContext.unlockInProgress = false;
+            onCompleted: result => internalContext.finishPam(result)
+        }
+
+        PamContext {
+            id: passwordPam
+
+            configDirectory: Paths.shellDir + "/Modules/Lock/pam"
+            config: "password_only.conf"
+
+            onPamMessage: {
+                if (this.responseRequired)
+                    this.respond(internalContext.currentText);
             }
+
+            onCompleted: result => internalContext.finishPam(result)
         }
     }
 

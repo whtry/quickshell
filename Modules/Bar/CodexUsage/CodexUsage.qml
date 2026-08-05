@@ -87,32 +87,70 @@ Item {
     RowLayout {
         id: content
         anchors.centerIn: parent
-        spacing: 5
+        spacing: 6
 
-        Text {
-            text: "data_object"
-            color: root.failed && !root.ready
-                ? Appearance.colors.colError
-                : root.usageColor
-            font.family: Sizes.fontMaterialSymbols
-            font.pixelSize: 18
+        Item {
+            id: usageZone
+            implicitWidth: usageRow.implicitWidth
+            implicitHeight: usageRow.implicitHeight
+
+            RowLayout {
+                id: usageRow
+                anchors.centerIn: parent
+                spacing: 5
+
+                Text {
+                    text: "data_object"
+                    color: root.failed && !root.ready
+                        ? Appearance.colors.colError
+                        : root.usageColor
+                    font.family: Sizes.fontMaterialSymbols
+                    font.pixelSize: 18
+                }
+
+                Text {
+                    text: root.ready
+                        ? root.remainingPercent + "%"
+                        : usageProcess.running ? "…" : "?"
+                    color: Appearance.colors.colOnSurface
+                    font.family: Sizes.fontFamilyMono
+                    font.pixelSize: 13
+                    font.weight: Font.Bold
+                }
+            }
+
+            MouseArea {
+                id: usageMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Quickshell.execDetached([
+                    "xdg-open",
+                    "https://chatgpt.com/codex/settings/usage"
+                ])
+            }
+
+            PopupToolTip {
+                extraVisibleCondition: usageMouse.containsMouse
+                text: root.tooltipText
+            }
         }
 
-        Text {
-            text: root.ready
-                ? root.remainingPercent + "%"
-                : usageProcess.running ? "…" : "?"
-            color: Appearance.colors.colOnSurface
-            font.family: Sizes.fontFamilyMono
-            font.pixelSize: 13
-            font.weight: Font.Bold
+        Rectangle {
+            id: separator
+            Layout.preferredWidth: 1
+            Layout.preferredHeight: 16
+            Layout.leftMargin: 2
+            visible: PersonalizationConfig
+                .isExtensionEnabled("codexClipboardShortcut")
+            color: Qt.alpha(
+                Appearance.colors.colOutlineVariant, 0.65)
         }
 
         Rectangle {
             id: clipboardShortcut
             Layout.preferredWidth: 24
             Layout.preferredHeight: 24
-            Layout.leftMargin: 2
             visible: PersonalizationConfig
                 .isExtensionEnabled("codexClipboardShortcut")
             radius: 12
@@ -144,22 +182,6 @@ Item {
                 text: qsTr("打开剪贴板历史")
             }
         }
-    }
-
-    MouseArea {
-        id: mouseArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: Quickshell.execDetached([
-            "xdg-open",
-            "https://chatgpt.com/codex/settings/usage"
-        ])
-    }
-
-    PopupToolTip {
-        extraVisibleCondition: mouseArea.containsMouse
-        text: root.tooltipText
     }
 
     Process {

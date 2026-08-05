@@ -208,6 +208,7 @@ Singleton {
     property var extensionComponents: ({
         "appLauncher": false,
         "codexUsage": false,
+        "codexClipboardShortcut": true,
         "powerProfiles": false,
         "batteryRing": false,
         "powerProfileRefreshRate": false
@@ -740,7 +741,8 @@ Singleton {
     function setExtensionEnabled(id, enabled) {
         const supported = [
             "appLauncher", "codexUsage", "powerProfiles",
-            "batteryRing", "powerProfileRefreshRate"
+            "batteryRing", "powerProfileRefreshRate",
+            "codexClipboardShortcut"
         ];
         if (supported.indexOf(id) < 0)
             return;

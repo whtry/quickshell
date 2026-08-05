@@ -107,6 +107,43 @@ Item {
             font.pixelSize: 13
             font.weight: Font.Bold
         }
+
+        Rectangle {
+            id: clipboardShortcut
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 24
+            Layout.leftMargin: 2
+            visible: PersonalizationConfig
+                .isExtensionEnabled("codexClipboardShortcut")
+            radius: 12
+            color: clipboardMouse.containsMouse
+                ? Qt.alpha(Appearance.colors.colSurfaceContainerHigh, 0.7)
+                : "transparent"
+
+            Text {
+                anchors.centerIn: parent
+                text: "content_paste"
+                color: Appearance.colors.colOnSurfaceVariant
+                font.family: Sizes.fontMaterialSymbols
+                font.pixelSize: 15
+            }
+
+            MouseArea {
+                id: clipboardMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Quickshell.execDetached([
+                    "qs", "--path", Paths.shellDir,
+                    "ipc", "call", "spotlight", "openMode", "clipboard"
+                ])
+            }
+
+            PopupToolTip {
+                extraVisibleCondition: clipboardMouse.containsMouse
+                text: qsTr("打开剪贴板历史")
+            }
+        }
     }
 
     MouseArea {

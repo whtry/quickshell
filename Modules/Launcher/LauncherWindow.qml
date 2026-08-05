@@ -380,7 +380,19 @@ PanelWindow {
                 }
             }
         }
-        root.selectResult(restoredIndex >= 0 ? restoredIndex : 0);
+        // Nothing was explicitly selected: keep the current position instead
+        // of forcing the list back to the top whenever the results rebuild.
+        root.selectResult(
+            restoredIndex >= 0
+                ? restoredIndex
+                : Math.max(
+                    0,
+                    Math.min(
+                        root.selectedResultIndex,
+                        root.activeResults.length - 1
+                    )
+                )
+        );
     }
 
     function openWebQuery() {

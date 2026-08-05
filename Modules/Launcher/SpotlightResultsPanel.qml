@@ -49,6 +49,9 @@ Item {
             + style.wallpaperLabelHeight
             + style.wallpaperGridGap
     readonly property Item blurRegionItem: panelBlurRegion
+    property real _clipboardSavedContentY: 0
+    property int _clipboardLastCount: -1
+    property bool _clipboardRestorePending: false
     readonly property int targetHeight: {
         if (!expanded)
             return 0;
@@ -108,6 +111,35 @@ Item {
     }
 
     onSelectedIndexChanged: ensureCurrentVisible()
+
+    onResultsChanged: {
+        if (root.mode !== "clipboard" || root._clipboardRestorePending)
+            return;
+        // A details-only rebuild keeps the same number of rows, so preserve
+        // the scroll position instead of letting the view reset to the top.
+        if (root._clipboardLastCount >= 0
+                && root.results.length !== root._clipboardLastCount) {
+            root._clipboardLastCount = root.results.length;
+            return;
+        }
+        root._clipboardLastCount = root.results.length;
+        root._clipboardSavedContentY = clipboardList.contentY;
+        root._clipboardRestorePending = true;
+        clipboardRestoreTimer.restart();
+    }
+
+    Timer {
+        id: clipboardRestoreTimer
+
+        interval: 0
+        repeat: false
+        onTriggered: {
+            if (!root._clipboardRestorePending)
+                return;
+            root._clipboardRestorePending = false;
+            clipboardList.contentY = root._clipboardSavedContentY;
+        }
+    }
 
     function fallbackIconSource() {
         const fallback =

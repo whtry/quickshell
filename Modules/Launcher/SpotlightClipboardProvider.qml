@@ -183,7 +183,10 @@ Item {
         }
 
         function onDetailsRevisionChanged() {
-            root.rebuild();
+            // Inspections complete one after another; coalesce the resulting
+            // rebuilds so the list model is not replaced repeatedly while the
+            // user is scrolling.
+            rebuildTimer.restart();
         }
 
         function onRestored(id) {
@@ -194,5 +197,13 @@ Item {
             if (action === "restore")
                 root.restoreFailed(String(id), String(code), String(message));
         }
+    }
+
+    Timer {
+        id: rebuildTimer
+
+        interval: 90
+        repeat: false
+        onTriggered: root.rebuild()
     }
 }

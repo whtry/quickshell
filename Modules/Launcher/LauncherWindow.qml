@@ -744,7 +744,7 @@ PanelWindow {
         opacity: root.windowProgress
         scale: style.initialScale
             + (1 - style.initialScale) * root.windowProgress
-        transformOrigin: Item.Top
+        transformOrigin: Item.Center
         layer.enabled: root.spotlightAnimating
         layer.smooth: true
 

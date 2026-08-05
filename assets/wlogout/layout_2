@@ -1,6 +1,6 @@
 {
     "label": "lock",
-    "action": "qs ipc call lock open",
+    "action": "${LOCK_CMD}",
     "text": "锁定",
     "keybind": "l"
 }

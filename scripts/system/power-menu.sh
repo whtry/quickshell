@@ -72,6 +72,8 @@ case "$style" in
         ;;
 esac
 
+export LOCK_CMD="qs --path $shell_dir ipc call lock open"
+
 export fntSize=$((screen_height * 2 / 100))
 export activeRad=50
 export buttonRad=80
@@ -102,14 +104,16 @@ esac
 
 runtime_dir=${XDG_RUNTIME_DIR:-/tmp}
 generated_css=$(mktemp "$runtime_dir/clavis-wlogout.XXXXXX.css")
-trap 'rm -f -- "$generated_css"' EXIT
+generated_layout=$(mktemp "$runtime_dir/clavis-wlogout.XXXXXX.layout")
+trap 'rm -f -- "$generated_css" "$generated_layout"' EXIT
 
 envsubst < "$template" > "$generated_css"
+envsubst < "$layout" > "$generated_layout"
 wlogout \
     --buttons-per-row "$columns" \
     --column-spacing 0 \
     --row-spacing 0 \
     --margin 0 \
-    --layout "$layout" \
+    --layout "$generated_layout" \
     --css "$generated_css" \
     --protocol layer-shell

@@ -32,9 +32,23 @@ Item {
     readonly property color batteryGreen: "#4caf50"
     readonly property color batteryOrange: "#ff9800"
     readonly property color batteryRed: "#f44336"
+    readonly property color batteryGreenContainer: "#1b5e20"
+    readonly property color batteryOrangeContainer: "#e65100"
+    readonly property color batteryGreenOnContainer: "#c8e6c9"
+    readonly property color batteryOrangeOnContainer: "#ffe0b2"
     readonly property color batteryEffectColor: powerSaverActive
         ? batteryOrange
         : (isCharging ? batteryGreen : batteryRed)
+    readonly property color batteryEffectBackground: powerSaverActive
+        ? batteryOrangeContainer
+        : (isCharging
+            ? batteryGreenContainer
+            : Appearance.colors.colErrorContainer)
+    readonly property color batteryEffectOnColor: powerSaverActive
+        ? batteryOrangeOnContainer
+        : (isCharging
+            ? batteryGreenOnContainer
+            : Appearance.colors.colOnErrorContainer)
 
     implicitHeight: buttonSize
     implicitWidth: buttonSize
@@ -57,7 +71,7 @@ Item {
             height: width
             radius: height / 2
             color: root.showBatteryWave
-                ? Appearance.colors.colErrorContainer
+                ? root.batteryEffectBackground
                 : Appearance.colors.colError
 
             Behavior on color {
@@ -211,8 +225,8 @@ Item {
             font.family: Sizes.fontMaterialSymbols
             font.pixelSize: 18
             font.weight: Font.Normal
-            color: root.showBatteryWave && root.batteryLevel < 0.5
-                ? Appearance.colors.colOnErrorContainer
+            color: root.showBatteryWave
+                ? root.batteryEffectOnColor
                 : Appearance.colors.colOnError
 
             Behavior on color {

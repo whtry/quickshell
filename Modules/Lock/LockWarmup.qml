@@ -11,6 +11,7 @@ Variants {
         required property var modelData
 
         property int activeGeneration: 0
+        property int pendingGeneration: 0
         property bool waitingForFrame: false
         property bool grabInProgress: false
 
@@ -43,7 +44,9 @@ Variants {
             grabInProgress = false;
             grabTimer.stop();
             warmupCapture.captureSource = null;
-            LockSnapshot.setSnapshot(modelData.name || "", "", null, snapshotGeneration);
+            if (snapshotGeneration === activeGeneration)
+                LockSnapshot.setSnapshot(modelData.name || "", "", null, snapshotGeneration);
+            startNextIfPending();
         }
 
         function grabSnapshot() {
@@ -55,29 +58,47 @@ Variants {
             snapshotTimeout.stop();
 
             warmupCapture.grabToImage(result => {
-                if (snapshotGeneration !== activeGeneration)
-                    return;
-
                 waitingForFrame = false;
                 grabInProgress = false;
                 grabTimer.stop();
                 warmupCapture.captureSource = null;
 
-                if (result)
-                    LockSnapshot.setSnapshot(modelData.name || "", result.url, result, snapshotGeneration);
-                else
-                    LockSnapshot.setSnapshot(modelData.name || "", "", null, snapshotGeneration);
+                if (snapshotGeneration === activeGeneration) {
+                    if (result)
+                        LockSnapshot.setSnapshot(modelData.name || "", result.url, result, snapshotGeneration);
+                    else
+                        LockSnapshot.setSnapshot(modelData.name || "", "", null, snapshotGeneration);
+                }
+                startNextIfPending();
             }, captureSize());
         }
 
         function startSnapshot(snapshotGeneration) {
+            // Never race the screencopy grab: starting a new capture while
+            // the previous grabToImage is still reading its buffer can free
+            // the buffer under the Wayland event handler and crash. Queue the
+            // new generation and begin it once the current grab completes.
+            if (waitingForFrame || grabInProgress) {
+                pendingGeneration = snapshotGeneration;
+                return;
+            }
+            beginSnapshot(snapshotGeneration);
+        }
+
+        function beginSnapshot(snapshotGeneration) {
             warmupCapture.captureSource = null;
             activeGeneration = snapshotGeneration;
+            pendingGeneration = 0;
             waitingForFrame = true;
             grabInProgress = false;
             grabTimer.stop();
             snapshotTimeout.restart();
             recaptureTimer.restart();
+        }
+
+        function startNextIfPending() {
+            if (pendingGeneration !== 0)
+                beginSnapshot(pendingGeneration);
         }
 
         Connections {

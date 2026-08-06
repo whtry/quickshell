@@ -31,7 +31,7 @@ Item {
         batteryAvailable && battery.acOnline === true
     readonly property color batteryGreen: "#4caf50"
     readonly property color batteryOrange: "#ff9800"
-    readonly property color batteryRed: "#f44336"
+    readonly property color batteryRed: "#c62828"
     readonly property color batteryGreenContainer: "#1b5e20"
     readonly property color batteryOrangeContainer: "#e65100"
     readonly property color batteryGreenOnContainer: "#c8e6c9"
